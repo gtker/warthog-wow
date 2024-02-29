@@ -1,0 +1,13 @@
+[package]
+name = "warthog_lib"
+description = "Authentication server for World of Warcraft versions 1.2 through to 3.3.5."
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "efdf950eb4895b865a34dc34bc34899de73ffb64", default-features = false, features = ["tokio"] }
+tokio = { version = "1.36.0", features = ["full"] }
+wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "ab0dedd997ae71045c49ff0343f5cd2ea7bd89ed", default-features = false, features = ["srp-default-math", "integrity"] }
+log = "0.4.20"
+anyhow = "1.0.80"
+md5 = "0.7.0"

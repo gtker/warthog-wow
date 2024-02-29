@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "warthog_wow",
+    "warthog_lib",
+]
+resolver = "2"
+
+[workspace.lints.rust]
+unused_must_use = "deny"
