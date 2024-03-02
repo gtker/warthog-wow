@@ -13,5 +13,5 @@ md5 = "0.7.0"
 wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "240ac060e2c1679fec3dec9110c1bf9b6468f992", default-features = false, features = ["tokio"] }
 #wow_login_messages = { path = "../../wow_messages/wow_login_messages", default-features = false, features = ["tokio"] }
 
-wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "406c035a6db5e463c2240f29c1955bb2ba63302c", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }
-#wow_srp = { path = "../../wow_srp", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }
+#wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "406c035a6db5e463c2240f29c1955bb2ba63302c", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }
+wow_srp = { path = "../../wow_srp", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }

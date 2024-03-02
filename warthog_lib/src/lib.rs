@@ -24,11 +24,12 @@ pub struct Options {
     pub randomize_pin_grid: bool,
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Credentials {
     pub password_verifier: [u8; PASSWORD_VERIFIER_LENGTH as usize],
     pub salt: [u8; SALT_LENGTH as usize],
     pub pin: Option<u32>,
+    pub matrix_card: Option<Vec<u8>>,
 }
 
 pub trait CredentialProvider: Clone + Send + Sync + 'static {

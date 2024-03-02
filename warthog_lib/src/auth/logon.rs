@@ -12,7 +12,7 @@ use wow_login_messages::version_8::{
     CMD_AUTH_LOGON_PROOF_Server, CMD_AUTH_LOGON_PROOF_Server_LoginResult,
 };
 use wow_login_messages::CollectiveMessage;
-use wow_srp::matrix_card::get_seed_value;
+use wow_srp::matrix_card::{get_matrix_card_seed, verify_matrix_card_hash, MatrixCard};
 use wow_srp::normalized_string::NormalizedString;
 use wow_srp::pin::{get_pin_grid_seed, get_pin_salt};
 use wow_srp::server::SrpVerifier;
@@ -71,15 +71,23 @@ pub(crate) async fn logon(
         });
     }
 
-    security_flag = security_flag.set_matrix_card(dbg!(
-        CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard {
-            challenge_count: 3,
-            digit_count: 3,
-            height: 30,
-            seed: get_seed_value(),
-            width: 26,
-        }
-    ));
+    let challenge_count = 3;
+    let digit_count = 2;
+    let height = 10;
+    let width = 8;
+    let seed = get_matrix_card_seed();
+
+    if credentials.matrix_card.is_some() {
+        security_flag = security_flag.set_matrix_card(
+            CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard {
+                challenge_count,
+                digit_count,
+                height,
+                seed,
+                width,
+            },
+        );
+    }
 
     CMD_AUTH_LOGON_CHALLENGE_Server {
         result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::Success {
@@ -99,24 +107,36 @@ pub(crate) async fn logon(
         c.protocol_version,
     )
     .await?;
-    dbg!(&s);
+
+    let client_public_key = PublicKey::from_le_bytes(s.client_public_key)?;
+    let Ok((server, proof)) = proof.into_server(client_public_key, s.client_proof) else {
+        CMD_AUTH_LOGON_PROOF_Server {
+            result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+        }
+        .tokio_write_protocol(&mut stream, c.protocol_version)
+        .await?;
+
+        return Err(anyhow!("invalid password for {}", c.account_name));
+    };
 
     if let Some(p) = credentials.pin {
         if let Some(pin) = s.security_flag.get_pin() {
-            if let Some(hash) =
-                wow_srp::pin::calculate_hash(p, pin_grid_seed, &pin_salt, &pin.pin_salt)
-            {
-                if hash != pin.pin_hash {
-                    CMD_AUTH_LOGON_PROOF_Server {
-                        result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-                    }
-                    .tokio_write_protocol(&mut stream, c.protocol_version)
-                    .await?;
-
-                    return Err(anyhow!("{} sent incorrect pin", c.account_name));
-                } else {
-                    println!("PIN hashes match");
+            if wow_srp::pin::verify_client_pin_hash(
+                p,
+                pin_grid_seed,
+                &pin_salt,
+                &pin.pin_salt,
+                &pin.pin_hash,
+            ) {
+                println!("PIN hashes match");
+            } else {
+                CMD_AUTH_LOGON_PROOF_Server {
+                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
                 }
+                .tokio_write_protocol(&mut stream, c.protocol_version)
+                .await?;
+
+                return Err(anyhow!("{} sent incorrect pin", c.account_name));
             }
         } else {
             CMD_AUTH_LOGON_PROOF_Server {
@@ -126,6 +146,57 @@ pub(crate) async fn logon(
             .await?;
 
             return Err(anyhow!("{} did not send PIN when required", c.account_name));
+        }
+    }
+
+    if let Some(matrix_card) = credentials.matrix_card {
+        if let Some(card) = s.security_flag.get_matrix_card() {
+            let client_proof = card.matrix_card_proof;
+            let Some(matrix_card) = MatrixCard::from_data(digit_count, height, width, matrix_card)
+            else {
+                CMD_AUTH_LOGON_PROOF_Server {
+                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+                }
+                .tokio_write_protocol(&mut stream, c.protocol_version)
+                .await?;
+
+                return Err(anyhow!(
+                    "{} does not have matrix card data in the correct format",
+                    c.account_name
+                ));
+            };
+
+            if !verify_matrix_card_hash(
+                &matrix_card,
+                challenge_count,
+                seed,
+                server.session_key(),
+                &client_proof,
+            ) {
+                CMD_AUTH_LOGON_PROOF_Server {
+                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+                }
+                .tokio_write_protocol(&mut stream, c.protocol_version)
+                .await?;
+
+                return Err(anyhow!(
+                    "{} does not have matrix card data in the correct format",
+                    c.account_name
+                ));
+            } else {
+                println!("{} passed matrix card.", c.account_name);
+            }
+        } else {
+            CMD_AUTH_LOGON_PROOF_Server {
+                result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+            }
+            .tokio_write_protocol(&mut stream, c.protocol_version)
+            .await?;
+
+            return Err(anyhow!(
+                "{} did not send matrix card when required",
+                c.account_name
+            ));
         }
     }
 
@@ -145,18 +216,6 @@ pub(crate) async fn logon(
             return Err(anyhow!("invalid integrity check for '{}'", c.account_name));
         }
     }
-
-    let client_public_key = PublicKey::from_le_bytes(s.client_public_key)?;
-    let Ok((server, proof)) = proof.into_server(client_public_key, s.client_proof) else {
-        CMD_AUTH_LOGON_PROOF_Server {
-            result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-        }
-        .tokio_write_protocol(&mut stream, c.protocol_version)
-        .await?;
-
-        return Err(anyhow!("invalid password for {}", c.account_name));
-    };
-    dbg!(server.session_key());
 
     storage.add_key(c.account_name.clone(), server).await;
 

@@ -44,6 +44,7 @@ impl CredentialProvider for ProviderImpl {
                 password_verifier: *v.password_verifier(),
                 salt: *v.salt(),
                 pin: Some(1234),
+                matrix_card: Some(vec![0_u8; 10 * 8 * 2]),
             })
         }
     }
