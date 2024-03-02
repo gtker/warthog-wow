@@ -34,7 +34,7 @@ pub(crate) async fn logon(
         return Err(anyhow!("username '{}' is invalid", &c.account_name));
     };
 
-    let Some(credentials) = provider.get_user(&c.account_name) else {
+    let Some(credentials) = provider.get_user(&c.account_name).await else {
         CMD_AUTH_LOGON_CHALLENGE_Server {
             result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::FailUnknownAccount,
         }
@@ -101,7 +101,7 @@ pub(crate) async fn logon(
         }
     }
 
-    if let Some(game_files) = game_file_provider.get_game_files(&c) {
+    if let Some(game_files) = game_file_provider.get_game_files(&c).await {
         if wow_srp::integrity::login_integrity_check_generic(
             &game_files,
             &crc_salt,
@@ -129,7 +129,7 @@ pub(crate) async fn logon(
         return Err(anyhow!("invalid password for {}", c.account_name));
     };
 
-    storage.add_key(c.account_name.clone(), server);
+    storage.add_key(c.account_name.clone(), server).await;
 
     CMD_AUTH_LOGON_PROOF_Server {
         result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::Success {

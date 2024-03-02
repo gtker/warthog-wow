@@ -63,7 +63,7 @@ async fn auth(
 
     match c {
         InitialMessage::Logon(c) => {
-            if let Some(data) = patch_provider.get_patch(&c) {
+            if let Some(data) = patch_provider.get_patch(&c).await {
                 transfer::transfer(provider, storage, stream, c, data).await?
             } else {
                 logon(
@@ -97,7 +97,7 @@ pub(crate) async fn send_realm_list(
     .await
     .is_ok()
     {
-        let realms = realm_list_provider.get_realm_list(c);
+        let realms = realm_list_provider.get_realm_list(c).await;
 
         CMD_REALM_LIST_Server { realms }
             .tokio_write_protocol(&mut stream, c.protocol_version)

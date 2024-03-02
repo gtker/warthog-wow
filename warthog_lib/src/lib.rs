@@ -1,5 +1,6 @@
 mod auth;
 
+use std::future::Future;
 use std::net::SocketAddr;
 
 pub use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
@@ -26,27 +27,43 @@ pub struct Credentials {
 }
 
 pub trait CredentialProvider: Clone + Send + Sync + 'static {
-    fn get_user(&mut self, username: &str) -> Option<Credentials>;
+    fn get_user(&mut self, username: &str) -> impl Future<Output = Option<Credentials>> + Send;
 
-    fn add_user(&mut self, username: &str, password: &str) -> Option<()>;
+    fn add_user(
+        &mut self,
+        username: &str,
+        password: &str,
+    ) -> impl Future<Output = Option<()>> + Send;
 }
 
 pub trait KeyStorage: Clone + Send + Sync + 'static {
-    fn add_key(&mut self, username: String, server: SrpServer);
+    fn add_key(&mut self, username: String, server: SrpServer) -> impl Future<Output = ()> + Send;
 
-    fn get_key_for_user(&mut self, username: &str) -> Option<SrpServer>;
+    fn get_key_for_user(
+        &mut self,
+        username: &str,
+    ) -> impl Future<Output = Option<SrpServer>> + Send;
 }
 
 pub trait PatchProvider: Clone + Send + Sync + 'static {
-    fn get_patch(&mut self, message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Option<Vec<u8>>;
+    fn get_patch(
+        &mut self,
+        message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Vec<u8>>> + Send;
 }
 
 pub trait GameFileProvider: Clone + Send + Sync + 'static {
-    fn get_game_files(&mut self, message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Option<Vec<u8>>;
+    fn get_game_files(
+        &mut self,
+        message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Vec<u8>>> + Send;
 }
 
 pub trait RealmListProvider: Clone + Send + Sync + 'static {
-    fn get_realm_list(&mut self, message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Vec<Realm>;
+    fn get_realm_list(
+        &mut self,
+        message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Vec<Realm>> + Send;
 }
 
 pub async fn start_auth_server(

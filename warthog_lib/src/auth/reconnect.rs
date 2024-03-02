@@ -18,7 +18,7 @@ pub(crate) async fn reconnect(
     mut stream: TcpStream,
     c: CMD_AUTH_RECONNECT_CHALLENGE_Client,
 ) -> anyhow::Result<()> {
-    let Some(mut server) = storage.get_key_for_user(&c.account_name) else {
+    let Some(mut server) = storage.get_key_for_user(&c.account_name).await else {
         CMD_AUTH_RECONNECT_CHALLENGE_Server {
             result: CMD_AUTH_RECONNECT_CHALLENGE_Server_LoginResult::FailUnknownAccount,
         }

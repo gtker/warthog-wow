@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use warthog_lib::{
@@ -28,20 +29,26 @@ impl Args {
 struct ProviderImpl {}
 
 impl CredentialProvider for ProviderImpl {
-    fn get_user(&mut self, username: &str) -> Option<Credentials> {
+    fn get_user(&mut self, username: &str) -> impl Future<Output = Option<Credentials>> + Send {
         let v = SrpVerifier::from_username_and_password(
             NormalizedString::new(username).unwrap(),
             NormalizedString::new(username).unwrap(),
         );
 
-        Some(Credentials {
-            password_verifier: *v.password_verifier(),
-            salt: *v.salt(),
-        })
+        async move {
+            Some(Credentials {
+                password_verifier: *v.password_verifier(),
+                salt: *v.salt(),
+            })
+        }
     }
 
-    fn add_user(&mut self, _username: &str, _password: &str) -> Option<()> {
-        None
+    fn add_user(
+        &mut self,
+        _username: &str,
+        _password: &str,
+    ) -> impl Future<Output = Option<()>> + Send {
+        async move { None }
     }
 }
 
@@ -59,12 +66,17 @@ impl StorageImpl {
 }
 
 impl KeyStorage for StorageImpl {
-    fn add_key(&mut self, username: String, server: SrpServer) {
-        self.inner.lock().unwrap().insert(username, server);
+    fn add_key(&mut self, username: String, server: SrpServer) -> impl Future<Output = ()> + Send {
+        async move {
+            self.inner.lock().unwrap().insert(username, server);
+        }
     }
 
-    fn get_key_for_user(&mut self, username: &str) -> Option<SrpServer> {
-        self.inner.lock().unwrap().get(username).cloned()
+    fn get_key_for_user(
+        &mut self,
+        username: &str,
+    ) -> impl Future<Output = Option<SrpServer>> + Send {
+        async move { self.inner.lock().unwrap().get(username).cloned() }
     }
 }
 
@@ -72,8 +84,11 @@ impl KeyStorage for StorageImpl {
 struct PatchImpl {}
 
 impl PatchProvider for PatchImpl {
-    fn get_patch(&mut self, _message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Option<Vec<u8>> {
-        None
+    fn get_patch(
+        &mut self,
+        _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Vec<u8>>> + Send {
+        async move { None }
     }
 }
 
@@ -81,8 +96,11 @@ impl PatchProvider for PatchImpl {
 struct GameFileImpl {}
 
 impl GameFileProvider for GameFileImpl {
-    fn get_game_files(&mut self, _message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Option<Vec<u8>> {
-        None
+    fn get_game_files(
+        &mut self,
+        _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Vec<u8>>> + Send {
+        async move { None }
     }
 }
 
@@ -90,18 +108,23 @@ impl GameFileProvider for GameFileImpl {
 struct RealmListImpl {}
 
 impl RealmListProvider for RealmListImpl {
-    fn get_realm_list(&mut self, _message: &CMD_AUTH_LOGON_CHALLENGE_Client) -> Vec<Realm> {
-        vec![Realm {
-            realm_type: RealmType::PlayerVsEnvironment,
-            locked: false,
-            flag: Default::default(),
-            name: "Test Realm".to_string(),
-            address: "localhost:8085".to_string(),
-            population: Default::default(),
-            number_of_characters_on_realm: 3,
-            category: Default::default(),
-            realm_id: 0,
-        }]
+    fn get_realm_list(
+        &mut self,
+        _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Vec<Realm>> + Send {
+        async move {
+            vec![Realm {
+                realm_type: RealmType::PlayerVsEnvironment,
+                locked: false,
+                flag: Default::default(),
+                name: "Test Realm".to_string(),
+                address: "localhost:8085".to_string(),
+                population: Default::default(),
+                number_of_characters_on_realm: 3,
+                category: Default::default(),
+                realm_id: 0,
+            }]
+        }
     }
 }
 
