@@ -118,17 +118,30 @@ impl RealmListProvider for RealmListImpl {
         _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
     ) -> impl Future<Output = Vec<Realm>> + Send {
         async move {
-            vec![Realm {
-                realm_type: RealmType::PlayerVsEnvironment,
-                locked: false,
-                flag: Default::default(),
-                name: "Test Realm".to_string(),
-                address: "localhost:8085".to_string(),
-                population: Default::default(),
-                number_of_characters_on_realm: 3,
-                category: Default::default(),
-                realm_id: 0,
-            }]
+            vec![
+                Realm {
+                    realm_type: RealmType::PlayerVsEnvironment,
+                    locked: false,
+                    flag: Default::default(),
+                    name: "Test Realm2".to_string(),
+                    address: "localhost:8085".to_string(),
+                    population: Default::default(),
+                    number_of_characters_on_realm: 3,
+                    category: RealmCategory::One,
+                    realm_id: 1,
+                },
+                Realm {
+                    realm_type: RealmType::PlayerVsEnvironment,
+                    locked: false,
+                    flag: Default::default(),
+                    name: "Test Realm".to_string(),
+                    address: "localhost:8085".to_string(),
+                    population: Default::default(),
+                    number_of_characters_on_realm: 3,
+                    category: RealmCategory::Two,
+                    realm_id: 0,
+                },
+            ]
         }
     }
 }
