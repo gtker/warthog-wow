@@ -12,6 +12,7 @@ use wow_login_messages::version_8::{
     CMD_AUTH_LOGON_PROOF_Server, CMD_AUTH_LOGON_PROOF_Server_LoginResult,
 };
 use wow_login_messages::CollectiveMessage;
+use wow_srp::matrix_card::get_seed_value;
 use wow_srp::normalized_string::NormalizedString;
 use wow_srp::pin::{get_pin_grid_seed, get_pin_salt};
 use wow_srp::server::SrpVerifier;
@@ -72,11 +73,11 @@ pub(crate) async fn logon(
 
     security_flag = security_flag.set_matrix_card(dbg!(
         CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard {
-            challenge_count: 1,
-            digit_count: 2,
-            height: 10,
-            seed: 0,
-            width: 8,
+            challenge_count: 3,
+            digit_count: 3,
+            height: 30,
+            seed: get_seed_value(),
+            width: 26,
         }
     ));
 
