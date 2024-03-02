@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use warthog_lib::{
     start_auth_server, CMD_AUTH_LOGON_CHALLENGE_Client, CredentialProvider, Credentials,
-    GameFileProvider, KeyStorage, NormalizedString, Options, PatchProvider, Realm,
+    GameFileProvider, KeyStorage, NormalizedString, Options, PatchProvider, Realm, RealmCategory,
     RealmListProvider, RealmType, SrpServer, SrpVerifier,
 };
 

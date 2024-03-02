@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "efdf950eb4895b865a34dc34bc34899de73ffb64", default-features = false, features = ["tokio"] }
+wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "955f85fa8e753a7f492414bd3b6b95ace910e66b", default-features = false, features = ["tokio"] }
 tokio = { version = "1.36.0", features = ["full"] }
 wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "ab0dedd997ae71045c49ff0343f5cd2ea7bd89ed", default-features = false, features = ["srp-default-math", "integrity"] }
 log = "0.4.20"

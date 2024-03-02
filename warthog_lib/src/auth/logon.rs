@@ -6,9 +6,10 @@ use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::helper::tokio_expect_client_message_protocol;
 use wow_login_messages::version_8::{
     AccountFlag, CMD_AUTH_LOGON_CHALLENGE_Server, CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult,
-    CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag, CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_Pin,
-    CMD_AUTH_LOGON_PROOF_Client, CMD_AUTH_LOGON_PROOF_Server,
-    CMD_AUTH_LOGON_PROOF_Server_LoginResult,
+    CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag,
+    CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard,
+    CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_Pin, CMD_AUTH_LOGON_PROOF_Client,
+    CMD_AUTH_LOGON_PROOF_Server, CMD_AUTH_LOGON_PROOF_Server_LoginResult,
 };
 use wow_login_messages::CollectiveMessage;
 use wow_srp::normalized_string::NormalizedString;
@@ -69,6 +70,16 @@ pub(crate) async fn logon(
         });
     }
 
+    security_flag = security_flag.set_matrix_card(dbg!(
+        CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard {
+            challenge_count: 1,
+            digit_count: 2,
+            height: 10,
+            seed: 0,
+            width: 8,
+        }
+    ));
+
     CMD_AUTH_LOGON_CHALLENGE_Server {
         result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::Success {
             crc_salt,
@@ -87,11 +98,12 @@ pub(crate) async fn logon(
         c.protocol_version,
     )
     .await?;
+    dbg!(&s);
 
     if let Some(p) = credentials.pin {
         if let Some(pin) = s.security_flag.get_pin() {
             if let Some(hash) =
-                wow_srp::pin::calculate_hash(dbg!(p), pin_grid_seed, &pin_salt, &pin.pin_salt)
+                wow_srp::pin::calculate_hash(p, pin_grid_seed, &pin_salt, &pin.pin_salt)
             {
                 if hash != pin.pin_hash {
                     CMD_AUTH_LOGON_PROOF_Server {
@@ -143,6 +155,7 @@ pub(crate) async fn logon(
 
         return Err(anyhow!("invalid password for {}", c.account_name));
     };
+    dbg!(server.session_key());
 
     storage.add_key(c.account_name.clone(), server).await;
 
