@@ -54,13 +54,20 @@ pub(crate) async fn logon(
 
     let crc_salt = wow_srp::integrity::get_salt_value();
 
+    let mut security_flag = CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag::empty();
     let pin_grid_seed = if options.randomize_pin_grid {
         get_pin_grid_seed()
     } else {
         0
     };
-
     let pin_salt = get_pin_salt();
+
+    if credentials.pin.is_some() {
+        security_flag = security_flag.set_pin(CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_Pin {
+            pin_grid_seed,
+            pin_salt,
+        });
+    }
 
     CMD_AUTH_LOGON_CHALLENGE_Server {
         result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::Success {
@@ -68,12 +75,7 @@ pub(crate) async fn logon(
             generator: vec![GENERATOR],
             large_safe_prime: LARGE_SAFE_PRIME_LITTLE_ENDIAN.to_vec(),
             salt: *proof.salt(),
-            security_flag: CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag::new_pin(
-                CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_Pin {
-                    pin_grid_seed,
-                    pin_salt,
-                },
-            ),
+            security_flag,
             server_public_key: *proof.server_public_key(),
         },
     }
