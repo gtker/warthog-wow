@@ -2,7 +2,9 @@ mod auth;
 
 use std::future::Future;
 use std::net::SocketAddr;
+use tokio::net::TcpListener;
 
+use crate::auth::auth;
 pub use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 pub use wow_login_messages::all::Population;
 pub use wow_login_messages::version_8::Realm;
@@ -18,12 +20,15 @@ pub use wow_srp::SALT_LENGTH;
 pub struct Options {
     /// Address to host the auth server on.
     pub address: SocketAddr,
+    /// Shift around numbers on the PIN grid.
+    pub randomize_pin_grid: bool,
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Credentials {
     pub password_verifier: [u8; PASSWORD_VERIFIER_LENGTH as usize],
     pub salt: [u8; SALT_LENGTH as usize],
+    pub pin: Option<u32>,
 }
 
 pub trait CredentialProvider: Clone + Send + Sync + 'static {
@@ -73,17 +78,34 @@ pub async fn start_auth_server(
     game_file_provider: impl GameFileProvider,
     realm_list_provider: impl RealmListProvider,
     options: Options,
-) {
-    let auth = tokio::spawn(auth::auth_server(
-        provider,
-        storage,
-        patch_provider,
-        game_file_provider,
-        realm_list_provider,
-        options.address,
-    ));
+) -> anyhow::Result<()> {
+    let options: &'static mut _ = Box::leak(Box::new(options));
+    let listener = TcpListener::bind(options.address).await?;
 
-    let auth = tokio::join!(auth);
+    loop {
+        if let Ok((stream, _)) = listener.accept().await {
+            let provider = provider.clone();
+            let storage = storage.clone();
+            let patch_provider = patch_provider.clone();
+            let game_file_provider = game_file_provider.clone();
+            let realm_list_provider = realm_list_provider.clone();
+            let options: &'static _ = &*options;
 
-    auth.0.unwrap().unwrap();
+            tokio::spawn(async move {
+                if let Err(a) = auth(
+                    stream,
+                    provider,
+                    storage,
+                    patch_provider,
+                    game_file_provider,
+                    realm_list_provider,
+                    options,
+                )
+                .await
+                {
+                    println!("{a}");
+                }
+            });
+        }
+    }
 }

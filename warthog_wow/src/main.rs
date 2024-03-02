@@ -15,12 +15,16 @@ struct Args {
     /// Address to host auth server on.
     #[arg(short, long, default_value = "0.0.0.0:3724")]
     address: SocketAddr,
+    /// Randomize PIN grid number locations.
+    #[arg(short, long, default_value = "false")]
+    randomize_pin_grid: bool,
 }
 
 impl Args {
     fn to_options(self) -> Options {
         Options {
             address: self.address,
+            randomize_pin_grid: self.randomize_pin_grid,
         }
     }
 }
@@ -39,6 +43,7 @@ impl CredentialProvider for ProviderImpl {
             Some(Credentials {
                 password_verifier: *v.password_verifier(),
                 salt: *v.salt(),
+                pin: Some(1234),
             })
         }
     }
@@ -131,6 +136,7 @@ impl RealmListProvider for RealmListImpl {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
     start_auth_server(
         ProviderImpl {},
         StorageImpl::new(),
@@ -139,5 +145,6 @@ async fn main() {
         RealmListImpl {},
         args.to_options(),
     )
-    .await;
+    .await
+    .unwrap();
 }

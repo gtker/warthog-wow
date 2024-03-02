@@ -1,5 +1,5 @@
 use crate::auth::send_realm_list;
-use crate::{CredentialProvider, GameFileProvider, KeyStorage, RealmListProvider};
+use crate::{CredentialProvider, GameFileProvider, KeyStorage, Options, RealmListProvider};
 use anyhow::anyhow;
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
@@ -23,6 +23,7 @@ pub(crate) async fn logon(
     realm_list_provider: impl RealmListProvider,
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
+    options: &Options,
 ) -> anyhow::Result<()> {
     let Ok(username) = NormalizedString::new(&c.account_name) else {
         CMD_AUTH_LOGON_CHALLENGE_Server {
@@ -53,7 +54,12 @@ pub(crate) async fn logon(
 
     let crc_salt = wow_srp::integrity::get_salt_value();
 
-    let pin_grid_seed = get_pin_grid_seed();
+    let pin_grid_seed = if options.randomize_pin_grid {
+        get_pin_grid_seed()
+    } else {
+        0
+    };
+
     let pin_salt = get_pin_salt();
 
     CMD_AUTH_LOGON_CHALLENGE_Server {
@@ -74,30 +80,37 @@ pub(crate) async fn logon(
     .tokio_write_protocol(&mut stream, c.protocol_version)
     .await?;
 
-    let p = {
-        let mut p = dbg!(get_pin_grid_seed());
-        while p < 1000 {
-            p = dbg!(get_pin_grid_seed());
-        }
-        p
-    };
-
     let s = tokio_expect_client_message_protocol::<CMD_AUTH_LOGON_PROOF_Client, _>(
         &mut stream,
         c.protocol_version,
     )
     .await?;
-    dbg!(&s);
 
-    if let Some(pin) = s.security_flag.get_pin() {
-        if let Some(hash) =
-            wow_srp::pin::calculate_hash(dbg!(p), pin_grid_seed, &pin_salt, &pin.pin_salt)
-        {
-            if hash != pin.pin_hash {
-                println!("PIN hashes do not match");
-            } else {
-                println!("PIN hashes match");
+    if let Some(p) = credentials.pin {
+        if let Some(pin) = s.security_flag.get_pin() {
+            if let Some(hash) =
+                wow_srp::pin::calculate_hash(dbg!(p), pin_grid_seed, &pin_salt, &pin.pin_salt)
+            {
+                if hash != pin.pin_hash {
+                    CMD_AUTH_LOGON_PROOF_Server {
+                        result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+                    }
+                    .tokio_write_protocol(&mut stream, c.protocol_version)
+                    .await?;
+
+                    return Err(anyhow!("{} sent incorrect pin", c.account_name));
+                } else {
+                    println!("PIN hashes match");
+                }
             }
+        } else {
+            CMD_AUTH_LOGON_PROOF_Server {
+                result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+            }
+            .tokio_write_protocol(&mut stream, c.protocol_version)
+            .await?;
+
+            return Err(anyhow!("{} did not send PIN when required", c.account_name));
         }
     }
 

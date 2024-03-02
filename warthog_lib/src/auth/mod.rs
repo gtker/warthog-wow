@@ -3,10 +3,10 @@ mod reconnect;
 mod transfer;
 
 use crate::auth::logon::logon;
-use crate::{CredentialProvider, GameFileProvider, KeyStorage, PatchProvider, RealmListProvider};
-use std::io;
-use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
+use crate::{
+    CredentialProvider, GameFileProvider, KeyStorage, Options, PatchProvider, RealmListProvider,
+};
+use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::helper::{
     tokio_expect_client_message_protocol, tokio_read_initial_message, InitialMessage,
@@ -15,49 +15,14 @@ use wow_login_messages::version_2::CMD_REALM_LIST_Client;
 use wow_login_messages::version_8::CMD_REALM_LIST_Server;
 use wow_login_messages::CollectiveMessage;
 
-pub(crate) async fn auth_server(
-    provider: impl CredentialProvider,
-    storage: impl KeyStorage,
-    patch_provider: impl PatchProvider,
-    game_file_provider: impl GameFileProvider,
-    realm_list_provider: impl RealmListProvider,
-    address: SocketAddr,
-) -> io::Result<()> {
-    let listener = TcpListener::bind(address).await?;
-
-    loop {
-        if let Ok((stream, _)) = listener.accept().await {
-            let provider = provider.clone();
-            let storage = storage.clone();
-            let patch_provider = patch_provider.clone();
-            let game_file_provider = game_file_provider.clone();
-            let realm_list_provider = realm_list_provider.clone();
-
-            tokio::spawn(async move {
-                if let Err(a) = auth(
-                    stream,
-                    provider,
-                    storage,
-                    patch_provider,
-                    game_file_provider,
-                    realm_list_provider,
-                )
-                .await
-                {
-                    println!("{a}");
-                }
-            });
-        }
-    }
-}
-
-async fn auth(
+pub(crate) async fn auth(
     mut stream: TcpStream,
     provider: impl CredentialProvider,
     storage: impl KeyStorage,
     mut patch_provider: impl PatchProvider,
     game_file_provider: impl GameFileProvider,
     realm_list_provider: impl RealmListProvider,
+    options: &Options,
 ) -> anyhow::Result<()> {
     let c = tokio_read_initial_message(&mut stream).await?;
 
@@ -73,6 +38,7 @@ async fn auth(
                     realm_list_provider,
                     stream,
                     c,
+                    options,
                 )
                 .await?
             }
