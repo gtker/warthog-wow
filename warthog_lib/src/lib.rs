@@ -2,6 +2,7 @@ mod auth;
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use crate::auth::auth;
@@ -55,14 +56,14 @@ pub trait PatchProvider: Clone + Send + Sync + 'static {
     fn get_patch(
         &mut self,
         message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Option<Vec<u8>>> + Send;
+    ) -> impl Future<Output = Option<Arc<[u8]>>> + Send;
 }
 
 pub trait GameFileProvider: Clone + Send + Sync + 'static {
     fn get_game_files(
         &mut self,
         message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Option<Vec<u8>>> + Send;
+    ) -> impl Future<Output = Option<Arc<[u8]>>> + Send;
 }
 
 pub trait RealmListProvider: Clone + Send + Sync + 'static {

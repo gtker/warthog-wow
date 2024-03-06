@@ -1,5 +1,6 @@
 use crate::{CredentialProvider, KeyStorage};
 use anyhow::anyhow;
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::version_8::opcodes::ClientOpcodeMessage;
@@ -14,7 +15,7 @@ pub(crate) async fn transfer(
     _storage: impl KeyStorage,
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
-    data: Vec<u8>,
+    data: Arc<[u8]>,
 ) -> anyhow::Result<()> {
     CMD_AUTH_LOGON_CHALLENGE_Server {
         result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::LoginDownloadFile,

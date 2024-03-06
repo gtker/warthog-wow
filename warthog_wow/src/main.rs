@@ -93,7 +93,7 @@ impl PatchProvider for PatchImpl {
     fn get_patch(
         &mut self,
         _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Option<Vec<u8>>> + Send {
+    ) -> impl Future<Output = Option<Arc<[u8]>>> + Send {
         async move { None }
     }
 }
@@ -105,7 +105,7 @@ impl GameFileProvider for GameFileImpl {
     fn get_game_files(
         &mut self,
         _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Option<Vec<u8>>> + Send {
+    ) -> impl Future<Output = Option<Arc<[u8]>>> + Send {
         async move { None }
     }
 }
