@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use warthog_lib::{
     start_auth_server, CMD_AUTH_LOGON_CHALLENGE_Client, CredentialProvider, Credentials,
-    GameFileProvider, KeyStorage, NormalizedString, Options, PatchProvider, Realm, RealmCategory,
-    RealmListProvider, RealmType, SrpServer, SrpVerifier,
+    GameFileProvider, KeyStorage, MatrixCard, MatrixCardOptions, NormalizedString, Options,
+    PatchProvider, Realm, RealmCategory, RealmListProvider, RealmType, SrpServer, SrpVerifier,
 };
 
 #[derive(clap::Parser)]
@@ -40,11 +40,25 @@ impl CredentialProvider for ProviderImpl {
         );
 
         async move {
+            const DIGIT_COUNT: u8 = 2;
+            const CHALLENGE_COUNT: u8 = 1;
+            const HEIGHT: u8 = 8;
+            const WIDTH: u8 = 8;
+
             Some(Credentials {
                 password_verifier: *v.password_verifier(),
                 salt: *v.salt(),
                 pin: Some(1234),
-                matrix_card: Some(vec![0_u8; 10 * 8 * 2]),
+                matrix_card: Some(MatrixCardOptions {
+                    matrix_card: MatrixCard::from_data(
+                        DIGIT_COUNT,
+                        HEIGHT,
+                        WIDTH,
+                        vec![0; DIGIT_COUNT as usize * HEIGHT as usize * WIDTH as usize],
+                    )
+                    .unwrap(),
+                    challenge_count: CHALLENGE_COUNT,
+                }),
             })
         }
     }

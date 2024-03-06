@@ -14,7 +14,7 @@ use wow_login_messages::version_8::{
     CMD_AUTH_LOGON_PROOF_Server, CMD_AUTH_LOGON_PROOF_Server_LoginResult,
 };
 use wow_login_messages::CollectiveMessage;
-use wow_srp::matrix_card::{get_matrix_card_seed, verify_matrix_card_hash, MatrixCard};
+use wow_srp::matrix_card::{get_matrix_card_seed, verify_matrix_card_hash};
 use wow_srp::normalized_string::NormalizedString;
 use wow_srp::pin::{get_pin_grid_seed, get_pin_salt};
 use wow_srp::server::{SrpServer, SrpVerifier};
@@ -73,20 +73,16 @@ pub(crate) async fn logon(
         });
     }
 
-    let challenge_count = 3;
-    let digit_count = 2;
-    let height = 10;
-    let width = 8;
     let seed = get_matrix_card_seed();
 
-    if credentials.matrix_card.is_some() {
+    if let Some(c) = &credentials.matrix_card {
         security_flag = security_flag.set_matrix_card(
             CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard {
-                challenge_count,
-                digit_count,
-                height,
+                challenge_count: c.challenge_count,
+                digit_count: c.matrix_card.digit_count(),
+                height: c.matrix_card.height(),
                 seed,
-                width,
+                width: c.matrix_card.width(),
             },
         );
     }
@@ -126,10 +122,6 @@ pub(crate) async fn logon(
         credentials,
         pin_grid_seed,
         &pin_salt,
-        challenge_count,
-        digit_count,
-        height,
-        width,
         seed,
         &s,
         &server,
@@ -185,10 +177,6 @@ async fn check_2fa_login_details(
     credentials: Credentials,
     pin_grid_seed: u32,
     pin_salt: &[u8; 16],
-    challenge_count: u8,
-    digit_count: u8,
-    height: u8,
-    width: u8,
     seed: u64,
     s: &CMD_AUTH_LOGON_PROOF_Client,
     server: &SrpServer,
@@ -210,19 +198,13 @@ async fn check_2fa_login_details(
         }
     }
 
-    if let Some(matrix_card) = credentials.matrix_card {
+    if let Some(cred_card) = credentials.matrix_card {
         if let Some(card) = s.security_flag.get_matrix_card() {
             let client_proof = card.matrix_card_proof;
-            let Some(matrix_card) = MatrixCard::from_data(digit_count, height, width, matrix_card)
-            else {
-                return Err(anyhow!(
-                    "{account_name} does not have matrix card data in the correct format",
-                ));
-            };
 
             if !verify_matrix_card_hash(
-                &matrix_card,
-                challenge_count,
+                &cred_card.matrix_card,
+                cred_card.challenge_count,
                 seed,
                 server.session_key(),
                 &client_proof,
