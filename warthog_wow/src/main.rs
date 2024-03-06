@@ -59,11 +59,11 @@ impl CredentialProvider for ProviderImpl {
 }
 
 #[derive(Clone)]
-struct StorageImpl {
+struct KeyImpl {
     inner: Arc<Mutex<HashMap<String, SrpServer>>>,
 }
 
-impl StorageImpl {
+impl KeyImpl {
     fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(Default::default())),
@@ -71,7 +71,7 @@ impl StorageImpl {
     }
 }
 
-impl KeyStorage for StorageImpl {
+impl KeyStorage for KeyImpl {
     fn add_key(&mut self, username: String, server: SrpServer) -> impl Future<Output = ()> + Send {
         async move {
             self.inner.lock().unwrap().insert(username, server);
@@ -153,7 +153,7 @@ async fn main() {
 
     start_auth_server(
         ProviderImpl {},
-        StorageImpl::new(),
+        KeyImpl::new(),
         PatchImpl {},
         GameFileImpl {},
         RealmListImpl {},
