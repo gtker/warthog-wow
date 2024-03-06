@@ -1,5 +1,7 @@
 use crate::auth::send_realm_list;
-use crate::{CredentialProvider, GameFileProvider, KeyStorage, Options, RealmListProvider};
+use crate::{
+    CredentialProvider, Credentials, GameFileProvider, KeyStorage, Options, RealmListProvider,
+};
 use anyhow::anyhow;
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
@@ -15,7 +17,7 @@ use wow_login_messages::CollectiveMessage;
 use wow_srp::matrix_card::{get_matrix_card_seed, verify_matrix_card_hash, MatrixCard};
 use wow_srp::normalized_string::NormalizedString;
 use wow_srp::pin::{get_pin_grid_seed, get_pin_salt};
-use wow_srp::server::SrpVerifier;
+use wow_srp::server::{SrpServer, SrpVerifier};
 use wow_srp::{PublicKey, GENERATOR, LARGE_SAFE_PRIME_LITTLE_ENDIAN};
 
 pub(crate) async fn logon(
@@ -109,7 +111,7 @@ pub(crate) async fn logon(
     .await?;
 
     let client_public_key = PublicKey::from_le_bytes(s.client_public_key)?;
-    let Ok((server, proof)) = proof.into_server(client_public_key, s.client_proof) else {
+    let Ok((server, server_proof)) = proof.into_server(client_public_key, s.client_proof) else {
         CMD_AUTH_LOGON_PROOF_Server {
             result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
         }
@@ -119,85 +121,28 @@ pub(crate) async fn logon(
         return Err(anyhow!("invalid password for {}", c.account_name));
     };
 
-    if let Some(p) = credentials.pin {
-        if let Some(pin) = s.security_flag.get_pin() {
-            if wow_srp::pin::verify_client_pin_hash(
-                p,
-                pin_grid_seed,
-                &pin_salt,
-                &pin.pin_salt,
-                &pin.pin_hash,
-            ) {
-                println!("PIN hashes match");
-            } else {
-                CMD_AUTH_LOGON_PROOF_Server {
-                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-                }
-                .tokio_write_protocol(&mut stream, c.protocol_version)
-                .await?;
-
-                return Err(anyhow!("{} sent incorrect pin", c.account_name));
-            }
-        } else {
-            CMD_AUTH_LOGON_PROOF_Server {
-                result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-            }
-            .tokio_write_protocol(&mut stream, c.protocol_version)
-            .await?;
-
-            return Err(anyhow!("{} did not send PIN when required", c.account_name));
+    if let Err(err) = check_2fa_login_details(
+        &c.account_name,
+        credentials,
+        pin_grid_seed,
+        &pin_salt,
+        challenge_count,
+        digit_count,
+        height,
+        width,
+        seed,
+        &s,
+        &server,
+    )
+    .await
+    {
+        CMD_AUTH_LOGON_PROOF_Server {
+            result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
         }
-    }
+        .tokio_write_protocol(&mut stream, c.protocol_version)
+        .await?;
 
-    if let Some(matrix_card) = credentials.matrix_card {
-        if let Some(card) = s.security_flag.get_matrix_card() {
-            let client_proof = card.matrix_card_proof;
-            let Some(matrix_card) = MatrixCard::from_data(digit_count, height, width, matrix_card)
-            else {
-                CMD_AUTH_LOGON_PROOF_Server {
-                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-                }
-                .tokio_write_protocol(&mut stream, c.protocol_version)
-                .await?;
-
-                return Err(anyhow!(
-                    "{} does not have matrix card data in the correct format",
-                    c.account_name
-                ));
-            };
-
-            if !verify_matrix_card_hash(
-                &matrix_card,
-                challenge_count,
-                seed,
-                server.session_key(),
-                &client_proof,
-            ) {
-                CMD_AUTH_LOGON_PROOF_Server {
-                    result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-                }
-                .tokio_write_protocol(&mut stream, c.protocol_version)
-                .await?;
-
-                return Err(anyhow!(
-                    "{} does not have matrix card data in the correct format",
-                    c.account_name
-                ));
-            } else {
-                println!("{} passed matrix card.", c.account_name);
-            }
-        } else {
-            CMD_AUTH_LOGON_PROOF_Server {
-                result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-            }
-            .tokio_write_protocol(&mut stream, c.protocol_version)
-            .await?;
-
-            return Err(anyhow!(
-                "{} did not send matrix card when required",
-                c.account_name
-            ));
-        }
+        return Err(err);
     }
 
     if let Some(game_files) = game_file_provider.get_game_files(&c).await {
@@ -223,7 +168,7 @@ pub(crate) async fn logon(
         result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::Success {
             account_flag: AccountFlag::empty(),
             hardware_survey_id: 0,
-            server_proof: proof,
+            server_proof,
             unknown: 0,
         },
     }
@@ -231,6 +176,69 @@ pub(crate) async fn logon(
     .await?;
 
     send_realm_list(&mut stream, &c, realm_list_provider).await?;
+
+    Ok(())
+}
+
+async fn check_2fa_login_details(
+    account_name: &str,
+    credentials: Credentials,
+    pin_grid_seed: u32,
+    pin_salt: &[u8; 16],
+    challenge_count: u8,
+    digit_count: u8,
+    height: u8,
+    width: u8,
+    seed: u64,
+    s: &CMD_AUTH_LOGON_PROOF_Client,
+    server: &SrpServer,
+) -> anyhow::Result<()> {
+    if let Some(p) = credentials.pin {
+        if let Some(pin) = s.security_flag.get_pin() {
+            if wow_srp::pin::verify_client_pin_hash(
+                p,
+                pin_grid_seed,
+                &pin_salt,
+                &pin.pin_salt,
+                &pin.pin_hash,
+            ) {
+                println!("PIN hashes match");
+            } else {
+            }
+        } else {
+            return Err(anyhow!("{account_name} did not send PIN when required"));
+        }
+    }
+
+    if let Some(matrix_card) = credentials.matrix_card {
+        if let Some(card) = s.security_flag.get_matrix_card() {
+            let client_proof = card.matrix_card_proof;
+            let Some(matrix_card) = MatrixCard::from_data(digit_count, height, width, matrix_card)
+            else {
+                return Err(anyhow!(
+                    "{account_name} does not have matrix card data in the correct format",
+                ));
+            };
+
+            if !verify_matrix_card_hash(
+                &matrix_card,
+                challenge_count,
+                seed,
+                server.session_key(),
+                &client_proof,
+            ) {
+                return Err(anyhow!(
+                    "{account_name} does not have matrix card data in the correct format",
+                ));
+            } else {
+                println!("{account_name} passed matrix card.");
+            }
+        } else {
+            return Err(anyhow!(
+                "{account_name} did not send matrix card when required",
+            ));
+        }
+    }
 
     Ok(())
 }
