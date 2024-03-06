@@ -827,7 +827,7 @@ checksum = "0770833d60a970638e989b3fa9fd2bb1aaadcf88963d1659fd7d9990196ed2d6"
 [[package]]
 name = "wow_login_messages"
 version = "0.4.0"
-source = "git+https://github.com/gtker/wow_messages?rev=240ac060e2c1679fec3dec9110c1bf9b6468f992#240ac060e2c1679fec3dec9110c1bf9b6468f992"
+source = "git+https://github.com/gtker/wow_messages?rev=fa87331ca369e7cfe557e6e1c25c7a758669da84#fa87331ca369e7cfe557e6e1c25c7a758669da84"
 dependencies = [
  "tokio",
 ]
@@ -835,6 +835,7 @@ dependencies = [
 [[package]]
 name = "wow_srp"
 version = "0.7.0"
+source = "git+https://github.com/gtker/wow_srp?rev=5428c4fd722005ea1be2e866d6f0e5d3000b7cd4#5428c4fd722005ea1be2e866d6f0e5d3000b7cd4"
 dependencies = [
  "hmac",
  "md5",
