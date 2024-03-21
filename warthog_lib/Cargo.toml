@@ -10,7 +10,7 @@ log = "0.4.20"
 anyhow = "1.0.80"
 md5 = "0.7.0"
 
-wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "fa87331ca369e7cfe557e6e1c25c7a758669da84", default-features = false, features = ["tokio"] }
+wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "fbedcb187b0ec6eb470eaf14c121de4cec1a7fb7", default-features = false, features = ["tokio"] }
 #wow_login_messages = { path = "../../wow_messages/wow_login_messages", default-features = false, features = ["tokio"] }
 
 wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "5428c4fd722005ea1be2e866d6f0e5d3000b7cd4", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }

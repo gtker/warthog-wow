@@ -827,7 +827,7 @@ checksum = "0770833d60a970638e989b3fa9fd2bb1aaadcf88963d1659fd7d9990196ed2d6"
 [[package]]
 name = "wow_login_messages"
 version = "0.4.0"
-source = "git+https://github.com/gtker/wow_messages?rev=fa87331ca369e7cfe557e6e1c25c7a758669da84#fa87331ca369e7cfe557e6e1c25c7a758669da84"
+source = "git+https://github.com/gtker/wow_messages?rev=fbedcb187b0ec6eb470eaf14c121de4cec1a7fb7#fbedcb187b0ec6eb470eaf14c121de4cec1a7fb7"
 dependencies = [
  "tokio",
 ]

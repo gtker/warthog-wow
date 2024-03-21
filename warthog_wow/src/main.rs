@@ -32,33 +32,49 @@ impl Args {
 #[derive(Copy, Clone)]
 struct ProviderImpl {}
 
+const DIGIT_COUNT: u8 = 2;
+const CHALLENGE_COUNT: u8 = 1;
+const HEIGHT: u8 = 8;
+const WIDTH: u8 = 8;
+
 impl CredentialProvider for ProviderImpl {
-    fn get_user(&mut self, username: &str) -> impl Future<Output = Option<Credentials>> + Send {
+    fn get_user(
+        &mut self,
+        username: &str,
+        message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Credentials>> + Send {
         let v = SrpVerifier::from_username_and_password(
             NormalizedString::new(username).unwrap(),
             NormalizedString::new(username).unwrap(),
         );
 
-        async move {
-            const DIGIT_COUNT: u8 = 2;
-            const CHALLENGE_COUNT: u8 = 1;
-            const HEIGHT: u8 = 8;
-            const WIDTH: u8 = 8;
+        let matrix_card = if message.version.supports_matrix_card() {
+            Some(MatrixCardOptions {
+                matrix_card: MatrixCard::from_data(
+                    DIGIT_COUNT,
+                    HEIGHT,
+                    WIDTH,
+                    vec![0; DIGIT_COUNT as usize * HEIGHT as usize * WIDTH as usize],
+                )
+                .unwrap(),
+                challenge_count: CHALLENGE_COUNT,
+            })
+        } else {
+            None
+        };
 
+        let pin = if message.version.supports_pin() {
+            Some(1234)
+        } else {
+            None
+        };
+
+        async move {
             Some(Credentials {
                 password_verifier: *v.password_verifier(),
                 salt: *v.salt(),
-                pin: Some(1234),
-                matrix_card: Some(MatrixCardOptions {
-                    matrix_card: MatrixCard::from_data(
-                        DIGIT_COUNT,
-                        HEIGHT,
-                        WIDTH,
-                        vec![0; DIGIT_COUNT as usize * HEIGHT as usize * WIDTH as usize],
-                    )
-                    .unwrap(),
-                    challenge_count: CHALLENGE_COUNT,
-                }),
+                pin,
+                matrix_card,
             })
         }
     }
@@ -141,7 +157,7 @@ impl RealmListProvider for RealmListImpl {
                     name: "Test Realm2".to_string(),
                     address: "localhost:8085".to_string(),
                     population: Default::default(),
-                    number_of_characters_on_realm: 3,
+                    number_of_characters_on_realm: 2,
                     category: RealmCategory::One,
                     realm_id: 1,
                 },

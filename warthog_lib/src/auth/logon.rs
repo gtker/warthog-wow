@@ -39,7 +39,7 @@ pub(crate) async fn logon(
         return Err(anyhow!("username '{}' is invalid", &c.account_name));
     };
 
-    let Some(credentials) = provider.get_user(&c.account_name).await else {
+    let Some(credentials) = provider.get_user(&c.account_name, &c).await else {
         CMD_AUTH_LOGON_CHALLENGE_Server {
             result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::FailUnknownAccount,
         }

@@ -41,7 +41,11 @@ pub struct MatrixCardOptions {
 }
 
 pub trait CredentialProvider: Clone + Send + Sync + 'static {
-    fn get_user(&mut self, username: &str) -> impl Future<Output = Option<Credentials>> + Send;
+    fn get_user(
+        &mut self,
+        username: &str,
+        message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Option<Credentials>> + Send;
 
     fn add_user(
         &mut self,
