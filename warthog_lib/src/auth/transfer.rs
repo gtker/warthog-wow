@@ -44,6 +44,13 @@ pub(crate) async fn transfer(
     const TRANSFER_CHUNK: usize = 64;
 
     for i in (offset..data.len()).step_by(TRANSFER_CHUNK) {
+        let mut buf = [0_u8; 1];
+        let size = stream.peek(&mut buf).await?;
+        if size != 0 {
+            // Client doesn't send any messages other than CMD_XFER_CANCEL
+            return Ok(());
+        }
+
         let length = if i + TRANSFER_CHUNK > data.len() {
             data.len() - i
         } else {
@@ -57,6 +64,7 @@ pub(crate) async fn transfer(
         .await?;
     }
 
+    // Keep the connection alive until the client breaks it off and updates
     while let Ok(m) = ClientOpcodeMessage::tokio_read(&mut stream).await {
         dbg!(m);
     }
