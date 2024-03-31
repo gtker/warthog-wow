@@ -7,6 +7,7 @@ edition = "2021"
 warthog_lib = { path = "../warthog_lib" }
 clap = { version = "4.5.1", features = ["derive"] }
 tokio.workspace = true
+warthog_messages = { path = "../warthog_messages", features = ["tokio"] }
 
 [lints]
 workspace = true

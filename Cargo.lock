@@ -567,12 +567,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "warthog_messages"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "warthog_wow"
 version = "0.1.0"
 dependencies = [
  "clap",
  "tokio",
  "warthog_lib",
+ "warthog_messages",
 ]
 
 [[package]]
