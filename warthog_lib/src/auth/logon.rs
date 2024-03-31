@@ -1,17 +1,17 @@
+use crate::auth::error::InternalError;
 use crate::auth::send_realm_list;
 use crate::{
-    CredentialProvider, Credentials, GameFileProvider, KeyStorage, Options, RealmListProvider,
+    CredentialProvider, Credentials, ExpectedOpcode, GameFileProvider, KeyStorage, Options,
+    RealmListProvider,
 };
-use anyhow::anyhow;
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::helper::tokio_expect_client_message_protocol;
 use wow_login_messages::version_8::{
-    AccountFlag, CMD_AUTH_LOGON_CHALLENGE_Server, CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult,
-    CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag,
+    AccountFlag, CMD_AUTH_LOGON_CHALLENGE_Server, CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag,
     CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_MatrixCard,
     CMD_AUTH_LOGON_CHALLENGE_Server_SecurityFlag_Pin, CMD_AUTH_LOGON_PROOF_Client,
-    CMD_AUTH_LOGON_PROOF_Server, CMD_AUTH_LOGON_PROOF_Server_LoginResult,
+    CMD_AUTH_LOGON_PROOF_Server,
 };
 use wow_login_messages::CollectiveMessage;
 use wow_srp::matrix_card::{get_matrix_card_seed, verify_matrix_card_hash};
@@ -28,25 +28,23 @@ pub(crate) async fn logon(
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
     options: &Options,
-) -> anyhow::Result<()> {
-    let Ok(username) = NormalizedString::new(&c.account_name) else {
-        CMD_AUTH_LOGON_CHALLENGE_Server {
-            result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::FailUnknownAccount,
-        }
-        .tokio_write_protocol(&mut stream, c.protocol_version)
-        .await?;
+) -> Result<(), InternalError> {
+    let protocol_version = c.protocol_version;
 
-        return Err(anyhow!("username '{}' is invalid", &c.account_name));
+    let Ok(username) = NormalizedString::new(&c.account_name) else {
+        CMD_AUTH_LOGON_CHALLENGE_Server::FailUnknownAccount
+            .tokio_write_protocol(&mut stream, protocol_version)
+            .await?;
+
+        return Err(InternalError::UsernameInvalid { message: c });
     };
 
     let Some(credentials) = provider.get_user(&c.account_name, &c).await else {
-        CMD_AUTH_LOGON_CHALLENGE_Server {
-            result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::FailUnknownAccount,
-        }
-        .tokio_write_protocol(&mut stream, c.protocol_version)
-        .await?;
+        CMD_AUTH_LOGON_CHALLENGE_Server::FailUnknownAccount
+            .tokio_write_protocol(&mut stream, protocol_version)
+            .await?;
 
-        return Err(anyhow!("username '{}' not found", &c.account_name));
+        return Err(InternalError::UsernameNotFound { message: c });
     };
 
     let verifier = SrpVerifier::from_database_values(
@@ -87,38 +85,61 @@ pub(crate) async fn logon(
         );
     }
 
-    CMD_AUTH_LOGON_CHALLENGE_Server {
-        result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::Success {
-            crc_salt,
-            generator: vec![GENERATOR],
-            large_safe_prime: LARGE_SAFE_PRIME_LITTLE_ENDIAN.to_vec(),
-            salt: *proof.salt(),
-            security_flag,
-            server_public_key: *proof.server_public_key(),
-        },
+    CMD_AUTH_LOGON_CHALLENGE_Server::Success {
+        crc_salt,
+        generator: vec![GENERATOR],
+        large_safe_prime: LARGE_SAFE_PRIME_LITTLE_ENDIAN.to_vec(),
+        salt: *proof.salt(),
+        security_flag,
+        server_public_key: *proof.server_public_key(),
     }
-    .tokio_write_protocol(&mut stream, c.protocol_version)
+    .tokio_write_protocol(&mut stream, protocol_version)
     .await?;
 
-    let s = tokio_expect_client_message_protocol::<CMD_AUTH_LOGON_PROOF_Client, _>(
+    let s = match tokio_expect_client_message_protocol::<CMD_AUTH_LOGON_PROOF_Client, _>(
         &mut stream,
-        c.protocol_version,
+        protocol_version,
     )
-    .await?;
-
-    let client_public_key = PublicKey::from_le_bytes(s.client_public_key)?;
-    let Ok((server, server_proof)) = proof.into_server(client_public_key, s.client_proof) else {
-        CMD_AUTH_LOGON_PROOF_Server {
-            result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
+    .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            return Err(InternalError::ExpectedOpcodeError {
+                err,
+                expected: ExpectedOpcode::LogonProof,
+            });
         }
-        .tokio_write_protocol(&mut stream, c.protocol_version)
-        .await?;
-
-        return Err(anyhow!("invalid password for {}", c.account_name));
     };
 
+    let client_public_key = match PublicKey::from_le_bytes(s.client_public_key) {
+        Ok(p) => p,
+        Err(err) => return Err(InternalError::InvalidPublicKey { message: c, err }),
+    };
+    let Ok((server, server_proof)) = proof.into_server(client_public_key, s.client_proof) else {
+        CMD_AUTH_LOGON_PROOF_Server::FailIncorrectPassword
+            .tokio_write_protocol(&mut stream, protocol_version)
+            .await?;
+
+        return Err(InternalError::InvalidPasswordForUser { message: c });
+    };
+
+    if let Some(game_files) = game_file_provider.get_game_files(&c).await {
+        if wow_srp::integrity::login_integrity_check_generic(
+            &game_files,
+            &crc_salt,
+            &s.client_public_key,
+        ) != s.crc_hash
+        {
+            CMD_AUTH_LOGON_PROOF_Server::FailVersionInvalid
+                .tokio_write_protocol(&mut stream, protocol_version)
+                .await?;
+
+            return Err(InternalError::InvalidIntegrityCheckForUser { message: c });
+        }
+    }
+
     if let Err(err) = check_2fa_login_details(
-        &c.account_name,
+        c.clone(),
         credentials,
         pin_grid_seed,
         &pin_salt,
@@ -128,43 +149,22 @@ pub(crate) async fn logon(
     )
     .await
     {
-        CMD_AUTH_LOGON_PROOF_Server {
-            result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailIncorrectPassword,
-        }
-        .tokio_write_protocol(&mut stream, c.protocol_version)
-        .await?;
+        CMD_AUTH_LOGON_PROOF_Server::FailIncorrectPassword
+            .tokio_write_protocol(&mut stream, protocol_version)
+            .await?;
 
         return Err(err);
     }
 
-    if let Some(game_files) = game_file_provider.get_game_files(&c).await {
-        if wow_srp::integrity::login_integrity_check_generic(
-            &game_files,
-            &crc_salt,
-            &s.client_public_key,
-        ) != s.crc_hash
-        {
-            CMD_AUTH_LOGON_PROOF_Server {
-                result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::FailVersionInvalid,
-            }
-            .tokio_write_protocol(&mut stream, c.protocol_version)
-            .await?;
-
-            return Err(anyhow!("invalid integrity check for '{}'", c.account_name));
-        }
-    }
-
     storage.add_key(c.account_name.clone(), server).await;
 
-    CMD_AUTH_LOGON_PROOF_Server {
-        result: CMD_AUTH_LOGON_PROOF_Server_LoginResult::Success {
-            account_flag: AccountFlag::empty(),
-            hardware_survey_id: 0,
-            server_proof,
-            unknown: 0,
-        },
+    CMD_AUTH_LOGON_PROOF_Server::Success {
+        account_flag: AccountFlag::empty(),
+        hardware_survey_id: 0,
+        server_proof,
+        unknown: 0,
     }
-    .tokio_write_protocol(&mut stream, c.protocol_version)
+    .tokio_write_protocol(&mut stream, protocol_version)
     .await?;
 
     send_realm_list(&mut stream, &c, realm_list_provider).await?;
@@ -173,14 +173,14 @@ pub(crate) async fn logon(
 }
 
 async fn check_2fa_login_details(
-    account_name: &str,
+    c: CMD_AUTH_LOGON_CHALLENGE_Client,
     credentials: Credentials,
     pin_grid_seed: u32,
     pin_salt: &[u8; 16],
     seed: u64,
     s: &CMD_AUTH_LOGON_PROOF_Client,
     server: &SrpServer,
-) -> anyhow::Result<()> {
+) -> Result<(), InternalError> {
     if let Some(p) = credentials.pin {
         if let Some(pin) = s.security_flag.get_pin() {
             if wow_srp::pin::verify_client_pin_hash(
@@ -192,9 +192,10 @@ async fn check_2fa_login_details(
             ) {
                 println!("PIN hashes match");
             } else {
+                return Err(InternalError::PinInvalidForUser { message: c });
             }
         } else {
-            return Err(anyhow!("{account_name} did not send PIN when required"));
+            return Err(InternalError::PinNotSentForUser { message: c });
         }
     }
 
@@ -209,16 +210,12 @@ async fn check_2fa_login_details(
                 server.session_key(),
                 &client_proof,
             ) {
-                return Err(anyhow!(
-                    "{account_name} does not have matrix card data in the correct format",
-                ));
+                return Err(InternalError::MatrixCardInvalidForUser { message: c });
             } else {
-                println!("{account_name} passed matrix card.");
+                println!("{} passed matrix card.", c.account_name);
             }
         } else {
-            return Err(anyhow!(
-                "{account_name} did not send matrix card when required",
-            ));
+            return Err(InternalError::MatrixCardDataNotSentForUser { message: c });
         }
     }
 

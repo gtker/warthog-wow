@@ -2,11 +2,14 @@ use clap::Parser;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use warthog_lib::{
-    start_auth_server, CMD_AUTH_LOGON_CHALLENGE_Client, CredentialProvider, Credentials,
-    GameFileProvider, KeyStorage, MatrixCard, MatrixCardOptions, NormalizedString, Options,
-    PatchProvider, Realm, RealmCategory, RealmListProvider, RealmType, SrpServer, SrpVerifier,
+    start_auth_server, CMD_AUTH_LOGON_CHALLENGE_Client, CMD_AUTH_RECONNECT_CHALLENGE_Client,
+    ClientOpcodeMessage, CredentialProvider, Credentials, ErrorProvider, ExpectedOpcode,
+    ExpectedOpcodeError, GameFileProvider, InvalidPublicKeyError, KeyStorage, MatrixCard,
+    MatrixCardOptions, NormalizedString, Options, PatchProvider, Realm, RealmCategory,
+    RealmListProvider, RealmType, SrpServer, SrpVerifier,
 };
 
 #[derive(clap::Parser)]
@@ -177,18 +180,170 @@ impl RealmListProvider for RealmListImpl {
     }
 }
 
+#[derive(Clone)]
+struct ErrorImpl {}
+
+impl ErrorProvider for crate::ErrorImpl {
+    fn message_invalid(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        opcode: ClientOpcodeMessage,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?}, invalid message received {opcode}, ") }
+    }
+
+    fn username_invalid(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} username invalid") }
+    }
+
+    fn username_not_found(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} username not found") }
+    }
+
+    fn invalid_password(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid password") }
+    }
+
+    fn invalid_integrity_check(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid integrity check") }
+    }
+
+    fn invalid_pin(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid pin") }
+    }
+
+    fn pin_not_sent(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} pin not sent") }
+    }
+
+    fn matrix_card_not_sent(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} matrix card not sent") }
+    }
+
+    fn invalid_matrix_card(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid matrix card") }
+    }
+
+    fn invalid_user_attempted_reconnect(
+        &mut self,
+        message: CMD_AUTH_RECONNECT_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid user attempted reconnect") }
+    }
+
+    fn invalid_reconnect_integrity_check(
+        &mut self,
+        message: CMD_AUTH_RECONNECT_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid reconnect integrity check") }
+    }
+
+    fn invalid_reconnect_proof(
+        &mut self,
+        message: CMD_AUTH_RECONNECT_CHALLENGE_Client,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid reconnect proof") }
+    }
+
+    fn invalid_public_key(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        err: InvalidPublicKeyError,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} invalid public key {err}") }
+    }
+
+    fn io_error(
+        &mut self,
+        io: std::io::Error,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {io}") }
+    }
+
+    fn provided_file_too_large(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        size: usize,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} provided file too large: {size}") }
+    }
+
+    fn transfer_offset_too_large(
+        &mut self,
+        message: CMD_AUTH_LOGON_CHALLENGE_Client,
+        size: u64,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {message:?} transfer offset too large: {size}") }
+    }
+
+    fn invalid_expected_opcode(
+        &mut self,
+        err: ExpectedOpcodeError,
+        expected_opcode: ExpectedOpcode,
+        addr: SocketAddr,
+    ) -> impl Future<Output = ()> + Send {
+        async move { println!("{addr}, {err} {expected_opcode:?}") }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    start_auth_server(
-        ProviderImpl {},
-        KeyImpl::new(),
-        PatchImpl {},
-        GameFileImpl {},
-        RealmListImpl {},
-        args.to_options(),
-    )
-    .await
-    .unwrap();
+    let should_run = Arc::new(AtomicBool::new(true));
+
+    tokio::spawn(async move {
+        start_auth_server(
+            ProviderImpl {},
+            KeyImpl::new(),
+            PatchImpl {},
+            GameFileImpl {},
+            RealmListImpl {},
+            ErrorImpl {},
+            should_run,
+            args.to_options(),
+        )
+        .await
+        .unwrap();
+    });
 }

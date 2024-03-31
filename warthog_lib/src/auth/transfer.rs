@@ -1,12 +1,10 @@
-use crate::{CredentialProvider, KeyStorage};
-use anyhow::anyhow;
+use crate::auth::error::InternalError;
+use crate::{CredentialProvider, ExpectedOpcode, KeyStorage};
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::version_8::opcodes::ClientOpcodeMessage;
-use wow_login_messages::version_8::{
-    CMD_AUTH_LOGON_CHALLENGE_Server, CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult,
-};
+use wow_login_messages::version_8::CMD_AUTH_LOGON_CHALLENGE_Server;
 use wow_login_messages::version_8::{CMD_XFER_DATA, CMD_XFER_INITIATE};
 use wow_login_messages::{CollectiveMessage, Message};
 
@@ -16,29 +14,53 @@ pub(crate) async fn transfer(
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
     data: Arc<[u8]>,
-) -> anyhow::Result<()> {
-    CMD_AUTH_LOGON_CHALLENGE_Server {
-        result: CMD_AUTH_LOGON_CHALLENGE_Server_LoginResult::LoginDownloadFile,
-    }
-    .tokio_write_protocol(&mut stream, c.protocol_version)
-    .await?;
+) -> Result<(), InternalError> {
+    CMD_AUTH_LOGON_CHALLENGE_Server::LoginDownloadFile
+        .tokio_write_protocol(&mut stream, c.protocol_version)
+        .await?;
 
     let file_md5 = md5::compute(&data).0;
 
+    let file_size: u64 = match data.len().try_into() {
+        Ok(e) => e,
+        Err(_) => {
+            return Err(InternalError::ProvidedFileTooLarge {
+                message: c,
+                size: data.len(),
+            })
+        }
+    };
+
     CMD_XFER_INITIATE {
         filename: "Patch".to_string(),
-        file_size: data.len().try_into()?,
+        file_size,
         file_md5,
     }
     .tokio_write(&mut stream)
     .await?;
 
-    let s = ClientOpcodeMessage::tokio_read_protocol(&mut stream, c.protocol_version).await?;
+    let s = match ClientOpcodeMessage::tokio_read_protocol(&mut stream, c.protocol_version).await {
+        Ok(s) => s,
+        Err(err) => {
+            return Err(InternalError::ExpectedOpcodeError {
+                err,
+                expected: ExpectedOpcode::XferOrResume,
+            });
+        }
+    };
 
     let offset = match s {
         ClientOpcodeMessage::CMD_XFER_ACCEPT => 0,
-        ClientOpcodeMessage::CMD_XFER_RESUME(c) => c.offset.try_into()?,
-        s => return Err(anyhow!("invalid opcode: {s}")),
+        ClientOpcodeMessage::CMD_XFER_RESUME(r) => match r.offset.try_into() {
+            Ok(e) => e,
+            Err(_) => {
+                return Err(InternalError::TransferOffsetTooLarge {
+                    message: c,
+                    size: r.offset,
+                })
+            }
+        },
+        opcode => return Err(InternalError::MessageInvalid { message: c, opcode }),
     };
 
     const TRANSFER_CHUNK: usize = 64;

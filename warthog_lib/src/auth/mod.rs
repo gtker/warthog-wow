@@ -1,10 +1,13 @@
+mod error;
 mod logon;
 mod reconnect;
 mod transfer;
 
+pub(crate) use crate::auth::error::InternalError;
 use crate::auth::logon::logon;
 use crate::{
-    CredentialProvider, GameFileProvider, KeyStorage, Options, PatchProvider, RealmListProvider,
+    CredentialProvider, ExpectedOpcode, GameFileProvider, KeyStorage, Options, PatchProvider,
+    RealmListProvider,
 };
 use tokio::net::TcpStream;
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
@@ -23,8 +26,16 @@ pub(crate) async fn auth(
     game_file_provider: impl GameFileProvider,
     realm_list_provider: impl RealmListProvider,
     options: &Options,
-) -> anyhow::Result<()> {
-    let c = tokio_read_initial_message(&mut stream).await?;
+) -> Result<(), InternalError> {
+    let c = match tokio_read_initial_message(&mut stream).await {
+        Ok(c) => c,
+        Err(err) => {
+            return Err(InternalError::ExpectedOpcodeError {
+                err,
+                expected: ExpectedOpcode::LoginOrReconnect,
+            });
+        }
+    };
 
     match c {
         InitialMessage::Logon(c) => {
@@ -55,7 +66,7 @@ pub(crate) async fn send_realm_list(
     mut stream: &mut TcpStream,
     c: &CMD_AUTH_LOGON_CHALLENGE_Client,
     mut realm_list_provider: impl RealmListProvider,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), InternalError> {
     while tokio_expect_client_message_protocol::<CMD_REALM_LIST_Client, _>(
         &mut stream,
         c.protocol_version,
