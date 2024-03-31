@@ -40,7 +40,14 @@ pub(crate) async fn auth(
     match c {
         InitialMessage::Logon(c) => {
             if let Some(data) = patch_provider.get_patch(&c).await {
-                transfer::transfer(provider, storage, stream, c, data).await?
+                if let Some(size) = verify_patch_length(data.len()) {
+                    transfer::transfer(stream, c, data, size).await?
+                } else {
+                    return Err(InternalError::ProvidedFileTooLarge {
+                        message: c,
+                        size: data.len(),
+                    });
+                }
             } else {
                 logon(
                     provider,
@@ -60,6 +67,10 @@ pub(crate) async fn auth(
     }
 
     Ok(())
+}
+
+fn verify_patch_length(size: usize) -> Option<u64> {
+    size.try_into().ok()
 }
 
 pub(crate) async fn send_realm_list(
