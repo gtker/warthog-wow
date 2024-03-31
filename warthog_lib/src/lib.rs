@@ -2,7 +2,7 @@ mod auth;
 
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -30,6 +30,8 @@ pub struct Options {
     pub address: SocketAddr,
     /// Shift around numbers on the PIN grid.
     pub randomize_pin_grid: bool,
+    /// Maximum amount of concurrent users.
+    pub max_concurrent_users: u32,
 }
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -216,8 +218,16 @@ pub async fn start_auth_server(
     let options: &'static mut _ = Box::leak(Box::new(options));
     let listener = TcpListener::bind(options.address).await?;
 
+    let concurrent_connections = Arc::new(AtomicU32::new(0));
+
     while should_run.load(Ordering::SeqCst) {
+        let connections = concurrent_connections.clone();
+        if connections.load(Ordering::SeqCst) > options.max_concurrent_users {
+            continue;
+        }
+
         if let Ok((stream, addr)) = listener.accept().await {
+            connections.fetch_add(1, Ordering::SeqCst);
             let provider = provider.clone();
             let storage = storage.clone();
             let patch_provider = patch_provider.clone();
@@ -300,6 +310,8 @@ pub async fn start_auth_server(
                         }
                     }
                 }
+
+                connections.fetch_sub(1, Ordering::SeqCst);
             });
         }
     }

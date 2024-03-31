@@ -2,7 +2,7 @@ use clap::Parser;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool};
 use std::sync::{Arc, Mutex};
 use warthog_lib::{
     start_auth_server, CMD_AUTH_LOGON_CHALLENGE_Client, CMD_AUTH_RECONNECT_CHALLENGE_Client,
@@ -28,6 +28,7 @@ impl Args {
         Options {
             address: self.address,
             randomize_pin_grid: self.randomize_pin_grid,
+            max_concurrent_users: 1000,
         }
     }
 }
@@ -332,7 +333,9 @@ async fn main() {
 
     let should_run = Arc::new(AtomicBool::new(true));
 
-    tokio::spawn(async move {
+    let should_run_inner = should_run.clone();
+
+    let t = tokio::spawn(async move {
         start_auth_server(
             ProviderImpl {},
             KeyImpl::new(),
@@ -340,10 +343,12 @@ async fn main() {
             GameFileImpl {},
             RealmListImpl {},
             ErrorImpl {},
-            should_run,
+            should_run_inner,
             args.to_options(),
         )
         .await
         .unwrap();
     });
+
+    t.await.unwrap();
 }
