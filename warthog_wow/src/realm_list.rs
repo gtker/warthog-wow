@@ -1,6 +1,8 @@
+use std::collections::BTreeSet;
 use std::future::Future;
 use warthog_lib::{
-    CMD_AUTH_LOGON_CHALLENGE_Client, Realm, RealmCategory, RealmListProvider, RealmType,
+    CMD_AUTH_LOGON_CHALLENGE_Client, Population, Realm, RealmCategory, RealmListProvider,
+    RealmType, Realm_RealmFlag,
 };
 
 #[derive(Clone)]
@@ -10,31 +12,53 @@ pub(crate) struct RealmListImpl {
 
 impl RealmListImpl {
     pub fn new() -> Self {
-        Self {
-            realms: vec![
-                Realm {
-                    realm_type: RealmType::PlayerVsEnvironment,
-                    locked: false,
-                    flag: Default::default(),
-                    name: "Test Realm2".to_string(),
-                    address: "localhost:8085".to_string(),
-                    population: Default::default(),
-                    number_of_characters_on_realm: 2,
-                    category: RealmCategory::One,
-                    realm_id: 1,
-                },
-                Realm {
-                    realm_type: RealmType::PlayerVsEnvironment,
-                    locked: false,
-                    flag: Default::default(),
-                    name: "Test Realm".to_string(),
-                    address: "localhost:8085".to_string(),
-                    population: Default::default(),
-                    number_of_characters_on_realm: 3,
-                    category: RealmCategory::Two,
-                    realm_id: 0,
-                },
-            ],
+        Self { realms: vec![] }
+    }
+
+    fn first_available_realm_id(&self) -> Option<u8> {
+        let mut ids_in_use = BTreeSet::new();
+
+        for realm in &self.realms {
+            ids_in_use.insert(realm.realm_id);
+        }
+
+        for i in 0..=u8::MAX {
+            if ids_in_use.get(&i).is_none() {
+                return Some(i);
+            }
+        }
+
+        None
+    }
+
+    pub fn add_realm(&mut self, name: String, address: String) -> Option<u8> {
+        if let Some(realm_id) = self.first_available_realm_id() {
+            self.realms.push(Realm {
+                realm_type: RealmType::PlayerVsEnvironment,
+                locked: false,
+                flag: Realm_RealmFlag::empty(),
+                name,
+                address,
+                population: Population::default(),
+                number_of_characters_on_realm: 0,
+                category: RealmCategory::default(),
+                realm_id,
+            });
+
+            Some(realm_id)
+        } else {
+            None
+        }
+    }
+
+    pub fn remove_realm(&mut self, realm_id: u8) {
+        if let Some((i, _)) = self
+            .realms
+            .iter()
+            .enumerate()
+            .find(|(_, a)| a.realm_id == realm_id)
+        {
+            self.realms.remove(i);
         }
     }
 }

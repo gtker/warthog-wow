@@ -55,17 +55,19 @@ async fn main() {
     let should_run_inner = should_run.clone();
 
     let keys = KeyImpl::new();
+    let realms = RealmListImpl::new();
 
     let (options, reply_address) = args.to_options();
 
     let keys_auth = keys.clone();
+    let realms_auth = realms.clone();
     let auth = tokio::spawn(async move {
         start_auth_server(
             ProviderImpl {},
             keys_auth,
             PatchImpl {},
             GameFileImpl {},
-            RealmListImpl::new(),
+            realms_auth,
             ErrorImpl {},
             should_run_inner,
             options,
@@ -73,7 +75,7 @@ async fn main() {
         .await
     });
 
-    let reply = tokio::spawn(async move { start_reply_server(keys, reply_address).await });
+    let reply = tokio::spawn(async move { start_reply_server(keys, realms, reply_address).await });
 
     tokio::select! {
         auth = auth => {

@@ -16,6 +16,8 @@ pub use wow_login_messages::version_8::opcodes::ClientOpcodeMessage;
 pub use wow_login_messages::version_8::Realm;
 pub use wow_login_messages::version_8::RealmCategory;
 pub use wow_login_messages::version_8::RealmType;
+pub use wow_login_messages::version_8::Realm_RealmFlag;
+pub use wow_login_messages::version_8::Realm_RealmFlag_SpecifyBuild;
 pub use wow_srp::error::InvalidPublicKeyError;
 pub use wow_srp::matrix_card::MatrixCard;
 pub use wow_srp::normalized_string::NormalizedString;
