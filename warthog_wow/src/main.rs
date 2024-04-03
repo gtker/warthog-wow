@@ -65,7 +65,7 @@ async fn main() {
             keys_auth,
             PatchImpl {},
             GameFileImpl {},
-            RealmListImpl {},
+            RealmListImpl::new(),
             ErrorImpl {},
             should_run_inner,
             options,

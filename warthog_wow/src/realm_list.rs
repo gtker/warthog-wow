@@ -4,15 +4,14 @@ use warthog_lib::{
 };
 
 #[derive(Clone)]
-pub(crate) struct RealmListImpl {}
+pub(crate) struct RealmListImpl {
+    realms: Vec<Realm>,
+}
 
-impl RealmListProvider for RealmListImpl {
-    fn get_realm_list(
-        &mut self,
-        _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Vec<Realm>> + Send {
-        async move {
-            vec![
+impl RealmListImpl {
+    pub fn new() -> Self {
+        Self {
+            realms: vec![
                 Realm {
                     realm_type: RealmType::PlayerVsEnvironment,
                     locked: false,
@@ -35,7 +34,16 @@ impl RealmListProvider for RealmListImpl {
                     category: RealmCategory::Two,
                     realm_id: 0,
                 },
-            ]
+            ],
         }
+    }
+}
+
+impl RealmListProvider for RealmListImpl {
+    fn get_realm_list(
+        &mut self,
+        _message: &CMD_AUTH_LOGON_CHALLENGE_Client,
+    ) -> impl Future<Output = Vec<Realm>> + Send {
+        async move { self.realms.clone() }
     }
 }
