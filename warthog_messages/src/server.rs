@@ -14,14 +14,7 @@ impl ServerOpcodes {
 
         Ok(match opcode[0] {
             Self::REQUEST_SESSION_KEY_OPCODE => {
-                let mut length = [0_u8; 1];
-                r.read_exact(&mut length)?;
-
-                let mut name = vec![0_u8; length[0].into()];
-
-                r.read_exact(&mut name)?;
-
-                let name = String::from_utf8(name)?;
+                let name = crate::read_string(r)?;
 
                 Self::RequestSessionKey { name }
             }
@@ -51,14 +44,7 @@ impl ServerOpcodes {
 
         Ok(match opcode[0] {
             Self::REQUEST_SESSION_KEY_OPCODE => {
-                let mut length = [0_u8; 1];
-                r.read_exact(&mut length).await?;
-
-                let mut name = vec![0_u8; length[0].into()];
-
-                r.read_exact(&mut name).await?;
-
-                let name = String::from_utf8(name)?;
+                let name = crate::read_string_tokio(r).await?;
 
                 Self::RequestSessionKey { name }
             }
