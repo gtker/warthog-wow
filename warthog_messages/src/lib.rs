@@ -7,7 +7,7 @@ pub use error::*;
 pub use server::*;
 
 #[cfg(feature = "sync")]
-fn read_bool<R: std::io::Read>(mut r: R) -> std::io::Result<bool> {
+fn read_bool<R: std::io::Read>(r: R) -> std::io::Result<bool> {
     Ok(if read_u8(r)? == 1 { true } else { false })
 }
 
@@ -31,8 +31,47 @@ fn write_u8<W: std::io::Write>(mut w: W, value: u8) -> std::io::Result<()> {
 }
 
 #[cfg(feature = "sync")]
+fn read_u16<R: std::io::Read>(mut r: R) -> std::io::Result<u16> {
+    let mut buf = [0_u8; 2];
+    r.read_exact(&mut buf)?;
+
+    Ok(buf[0] as u16 | (buf[1] as u16) << 8)
+}
+
+#[cfg(feature = "sync")]
+fn write_u16<W: std::io::Write>(mut w: W, value: u16) -> std::io::Result<()> {
+    let buf = value.to_le_bytes();
+    w.write_all(&buf)
+}
+
+#[cfg(feature = "sync")]
+fn read_u32<R: std::io::Read>(mut r: R) -> std::io::Result<u32> {
+    let mut buf = [0_u8; 4];
+    r.read_exact(&mut buf)?;
+
+    Ok(buf[0] as u32 | (buf[1] as u32) << 8 | (buf[2] as u32) << 16 | (buf[3] as u32) << 24)
+}
+
+#[cfg(feature = "sync")]
+fn write_u32<W: std::io::Write>(mut w: W, value: u32) -> std::io::Result<()> {
+    let buf = value.to_le_bytes();
+    w.write_all(&buf)
+}
+
+#[cfg(feature = "sync")]
+fn read_f32<R: std::io::Read>(r: R) -> std::io::Result<f32> {
+    let f = read_u32(r)?.to_le_bytes();
+    Ok(f32::from_le_bytes(f))
+}
+
+#[cfg(feature = "sync")]
+fn write_f32<W: std::io::Write>(w: W, value: f32) -> std::io::Result<()> {
+    Ok(write_u32(w, u32::from_le_bytes(value.to_le_bytes()))?)
+}
+
+#[cfg(feature = "sync")]
 fn read_string<R: std::io::Read>(mut r: R) -> Result<String, MessageError> {
-    let length = read_u8(r)?;
+    let length = read_u8(&mut r)?;
     let mut buf = vec![0_u8; length.into()];
     r.read_exact(&mut buf)?;
 
@@ -84,6 +123,54 @@ async fn write_u8_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
 ) -> std::io::Result<()> {
     let buf = [value];
     w.write_all(&buf).await
+}
+
+#[cfg(feature = "tokio")]
+async fn read_u16_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io::Result<u16> {
+    let mut buf = [0_u8; 2];
+    r.read_exact(&mut buf).await?;
+
+    Ok(buf[0] as u16 | (buf[1] as u16) << 8)
+}
+
+#[cfg(feature = "tokio")]
+async fn write_u16_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
+    mut w: W,
+    value: u16,
+) -> std::io::Result<()> {
+    let buf = value.to_le_bytes();
+    w.write_all(&buf).await
+}
+
+#[cfg(feature = "tokio")]
+async fn read_u32_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io::Result<u32> {
+    let mut buf = [0_u8; 4];
+    r.read_exact(&mut buf).await?;
+
+    Ok(buf[0] as u32 | (buf[1] as u32) << 8 | (buf[2] as u32) << 16 | (buf[3] as u32) << 24)
+}
+
+#[cfg(feature = "tokio")]
+async fn write_u32_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
+    mut w: W,
+    value: u32,
+) -> std::io::Result<()> {
+    let buf = value.to_le_bytes();
+    w.write_all(&buf).await
+}
+
+#[cfg(feature = "tokio")]
+async fn read_f32_tokio<R: tokio::io::AsyncReadExt + Unpin>(r: R) -> std::io::Result<f32> {
+    let f = read_u32_tokio(r).await?.to_le_bytes();
+    Ok(f32::from_le_bytes(f))
+}
+
+#[cfg(feature = "tokio")]
+async fn write_f32_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
+    w: W,
+    value: f32,
+) -> std::io::Result<()> {
+    Ok(write_u32_tokio(w, u32::from_le_bytes(value.to_le_bytes())).await?)
 }
 
 #[cfg(feature = "tokio")]
