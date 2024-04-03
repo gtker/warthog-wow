@@ -5,7 +5,19 @@ use warthog_lib::{
 };
 
 #[derive(Copy, Clone)]
-pub(crate) struct ProviderImpl {}
+pub(crate) struct ProviderImpl {
+    use_pin: bool,
+    use_matrix_card: bool,
+}
+
+impl ProviderImpl {
+    pub fn new(use_pin: bool, use_matrix_card: bool) -> Self {
+        Self {
+            use_pin,
+            use_matrix_card,
+        }
+    }
+}
 
 const DIGIT_COUNT: u8 = 2;
 const CHALLENGE_COUNT: u8 = 1;
@@ -23,7 +35,7 @@ impl CredentialProvider for ProviderImpl {
             NormalizedString::new(username).unwrap(),
         );
 
-        let matrix_card = if message.version.supports_matrix_card() {
+        let matrix_card = if message.version.supports_matrix_card() && self.use_matrix_card {
             Some(MatrixCardOptions {
                 matrix_card: MatrixCard::from_data(
                     DIGIT_COUNT,
@@ -38,7 +50,7 @@ impl CredentialProvider for ProviderImpl {
             None
         };
 
-        let pin = if message.version.supports_pin() {
+        let pin = if message.version.supports_pin() && self.use_pin {
             Some(1234)
         } else {
             None

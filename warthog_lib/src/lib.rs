@@ -4,6 +4,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 
 use crate::auth::{auth, InternalError};
@@ -222,40 +223,53 @@ pub async fn start_auth_server(
 
     let concurrent_connections = Arc::new(AtomicU32::new(0));
 
-    while should_run.load(Ordering::SeqCst) {
-        let connections = concurrent_connections.clone();
-        if connections.load(Ordering::SeqCst) > options.max_concurrent_users {
-            continue;
+    let should_run = tokio::spawn(async move {
+        while should_run.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::new(0, 100)).await;
         }
+    });
 
-        if let Ok((stream, addr)) = listener.accept().await {
-            connections.fetch_add(1, Ordering::SeqCst);
-            let provider = provider.clone();
-            let storage = storage.clone();
-            let patch_provider = patch_provider.clone();
-            let game_file_provider = game_file_provider.clone();
-            let realm_list_provider = realm_list_provider.clone();
-            let error_provider = error_provider.clone();
-            let options: &'static _ = &*options;
+    let main_loop = tokio::spawn(async move {
+        loop {
+            let connections = concurrent_connections.clone();
+            if connections.load(Ordering::SeqCst) > options.max_concurrent_users {
+                continue;
+            }
 
-            tokio::spawn(async move {
-                if let Err(err) = auth(
-                    stream,
-                    provider,
-                    storage,
-                    patch_provider,
-                    game_file_provider,
-                    realm_list_provider,
-                    options,
-                )
-                .await
-                {
-                    dispatch_error(error_provider, err, addr).await
-                }
+            if let Ok((stream, addr)) = listener.accept().await {
+                connections.fetch_add(1, Ordering::SeqCst);
+                let provider = provider.clone();
+                let storage = storage.clone();
+                let patch_provider = patch_provider.clone();
+                let game_file_provider = game_file_provider.clone();
+                let realm_list_provider = realm_list_provider.clone();
+                let error_provider = error_provider.clone();
+                let options: &'static _ = &*options;
 
-                connections.fetch_sub(1, Ordering::SeqCst);
-            });
+                tokio::spawn(async move {
+                    if let Err(err) = auth(
+                        stream,
+                        provider,
+                        storage,
+                        patch_provider,
+                        game_file_provider,
+                        realm_list_provider,
+                        options,
+                    )
+                    .await
+                    {
+                        dispatch_error(error_provider, err, addr).await
+                    }
+
+                    connections.fetch_sub(1, Ordering::SeqCst);
+                });
+            }
         }
+    });
+
+    tokio::select! {
+        _ = should_run => {}
+        _ = main_loop => {}
     }
 
     Ok(())

@@ -3,6 +3,7 @@ members = [
     "warthog_wow",
     "warthog_lib",
     "warthog_messages",
+    "wow_client",
 ]
 resolver = "2"
 

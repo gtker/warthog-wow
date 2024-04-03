@@ -52,9 +52,6 @@ msg register_realm_reply = 0x05 {
 }
 ```
 
-* Deregister realm
-    * OK/Fail
-
 * How many characters on realm?
     * Reply
 
@@ -63,9 +60,7 @@ msg request_character_amount = 0x02 {
     u8 name_length;
     String[name_length] name;
 }
-```
 
-```
 msg character_amount_answer = 0x03 {
     u8 name_length;
     String[name_length] name;
