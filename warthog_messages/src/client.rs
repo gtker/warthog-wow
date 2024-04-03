@@ -5,10 +5,14 @@ pub enum ClientOpcodes {
         name: String,
         session_key: Option<[u8; 40]>,
     },
+    RegisterRealmReply {
+        realm_id: Option<u8>,
+    },
 }
 
 impl ClientOpcodes {
     const SESSION_KEY_ANSWER_OPCODE: u8 = 1;
+    const REGISTER_REALM_REPLY_OPCODE: u8 = 5;
 
     #[cfg(feature = "sync")]
     pub fn read<R: std::io::Read>(mut r: R) -> Result<Self, MessageError> {
@@ -30,6 +34,16 @@ impl ClientOpcodes {
 
                 Self::SessionKeyAnswer { name, session_key }
             }
+            Self::REGISTER_REALM_REPLY_OPCODE => {
+                let success = crate::read_bool(&mut r)?;
+                let realm_id = if success {
+                    Some(crate::read_u8(&mut r)?)
+                } else {
+                    None
+                };
+
+                Self::RegisterRealmReply { realm_id }
+            }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
     }
@@ -46,6 +60,17 @@ impl ClientOpcodes {
                     crate::write_bool(&mut w, true)?;
 
                     w.write_all(session_key)?;
+                } else {
+                    crate::write_bool(&mut w, false)?;
+                }
+            }
+            ClientOpcodes::RegisterRealmReply { realm_id } => {
+                crate::write_u8(&mut w, Self::REGISTER_REALM_REPLY_OPCODE)?;
+
+                if let Some(realm_id) = realm_id {
+                    crate::write_bool(&mut w, true)?;
+
+                    crate::write_u8(&mut w, *realm_id)?;
                 } else {
                     crate::write_bool(&mut w, false)?;
                 }
@@ -77,6 +102,16 @@ impl ClientOpcodes {
 
                 Self::SessionKeyAnswer { name, session_key }
             }
+            Self::REGISTER_REALM_REPLY_OPCODE => {
+                let success = crate::read_bool_tokio(&mut r).await?;
+                let realm_id = if success {
+                    Some(crate::read_u8_tokio(&mut r).await?)
+                } else {
+                    None
+                };
+
+                Self::RegisterRealmReply { realm_id }
+            }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
     }
@@ -96,6 +131,17 @@ impl ClientOpcodes {
                     crate::write_bool_tokio(&mut w, true).await?;
 
                     w.write_all(session_key).await?;
+                } else {
+                    crate::write_bool_tokio(&mut w, false).await?;
+                }
+            }
+            ClientOpcodes::RegisterRealmReply { realm_id } => {
+                crate::write_u8_tokio(&mut w, Self::REGISTER_REALM_REPLY_OPCODE).await?;
+
+                if let Some(realm_id) = realm_id {
+                    crate::write_bool_tokio(&mut w, true).await?;
+
+                    crate::write_u8_tokio(&mut w, *realm_id).await?;
                 } else {
                     crate::write_bool_tokio(&mut w, false).await?;
                 }
