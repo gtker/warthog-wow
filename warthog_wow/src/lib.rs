@@ -68,11 +68,13 @@ pub async fn lib_main(
 #[cfg(test)]
 mod test {
     use crate::{lib_main, ApplicationOptions};
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
-    use warthog_lib::{CMD_AUTH_LOGON_CHALLENGE_Client, Options};
+    use tokio::net::TcpStream;
+    use warthog_lib::{CMD_AUTH_LOGON_CHALLENGE_Client, Options, Population};
+    use warthog_messages::ClientOpcodes;
     use wow_client::{connect_and_authenticate, Locale, Os, Platform, ProtocolVersion, Version};
 
     fn vanilla_1_12(account_name: String) -> CMD_AUTH_LOGON_CHALLENGE_Client {
@@ -90,6 +92,30 @@ mod test {
             utc_timezone_offset: 60,
             client_ip_address: Ipv4Addr::new(127, 0, 0, 1),
             account_name,
+        }
+    }
+
+    async fn register_realm(mut stream: &mut TcpStream, name: String, address: String) -> u8 {
+        warthog_messages::ServerOpcodes::RegisterRealm {
+            name,
+            address,
+            population: 200.0,
+            locked: false,
+            flags: 0,
+            category: 0,
+            realm_type: 0,
+            version_major: 0,
+            version_minor: 0,
+            version_patch: 0,
+            version_build: 0,
+        }
+        .tokio_write(&mut stream)
+        .await
+        .unwrap();
+
+        match ClientOpcodes::tokio_read(&mut stream).await.unwrap() {
+            ClientOpcodes::SessionKeyAnswer { .. } => panic!(),
+            ClientOpcodes::RegisterRealmReply { realm_id } => realm_id.unwrap(),
         }
     }
 
@@ -125,21 +151,89 @@ mod test {
         });
 
         let mut i = 0;
-        while TcpStream::connect(GAME_ADDRESS).is_err() {
+        while TcpStream::connect(GAME_ADDRESS).await.is_err() {
             assert_ne!(i, 20);
 
             tokio::time::sleep(Duration::new(0, 10)).await;
             i += 1;
         }
 
-        let (_, realms, _) =
-            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
-                .await
-                .unwrap();
+        {
+            let (_, realms, _) =
+                connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+                    .await
+                    .unwrap();
 
-        assert!(realms.is_empty());
+            assert!(realms.is_empty());
+        }
+
+        let mut reply = TcpStream::connect(REPLY_ADDRESS).await.unwrap();
+        let realm_id = register_realm(
+            &mut reply,
+            "Test Realm".to_string(),
+            "localhost:8085".to_string(),
+        )
+        .await;
+
+        {
+            let (_, realms, _) =
+                connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+                    .await
+                    .unwrap();
+
+            match realms.as_slice() {
+                [realm] => {
+                    assert_eq!(realm.population, Population::from(200.0));
+                    assert_eq!(realm.locked, false);
+                    assert_eq!(realm.name, "Test Realm");
+                    assert_eq!(realm.address, "localhost:8085");
+                    assert_eq!(realm.realm_id, realm_id);
+                }
+                _ => panic!(),
+            }
+            assert!(!realms.is_empty());
+        }
+
+        let mut reply2 = TcpStream::connect(REPLY_ADDRESS).await.unwrap();
+        let realm_id2 = register_realm(
+            &mut reply2,
+            "Test Realm2".to_string(),
+            "localhost:8088".to_string(),
+        )
+        .await;
+
+        {
+            let (_, realms, _) =
+                connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+                    .await
+                    .unwrap();
+
+            match realms.as_slice() {
+                [realm, realm2] => {
+                    let (first, second) = if realm.realm_id == 0 {
+                        (&realm, &realm2)
+                    } else {
+                        (&realm2, &realm)
+                    };
+
+                    assert_eq!(first.population, Population::from(200.0));
+                    assert_eq!(first.locked, false);
+                    assert_eq!(first.name, "Test Realm");
+                    assert_eq!(first.address, "localhost:8085");
+                    assert_eq!(first.realm_id, realm_id);
+
+                    assert_eq!(second.population, Population::from(200.0));
+                    assert_eq!(second.locked, false);
+                    assert_eq!(second.name, "Test Realm2");
+                    assert_eq!(second.address, "localhost:8088");
+                    assert_eq!(second.realm_id, realm_id2);
+                }
+                _ => panic!(),
+            }
+            assert!(!realms.is_empty());
+        }
+
         should_run.store(false, Ordering::SeqCst);
-
         main.await.unwrap();
     }
 }
