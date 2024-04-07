@@ -84,11 +84,46 @@ pub trait KeyStorage: Debug + Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Option<SrpServer>> + Send;
 }
 
+#[derive(Debug, Clone)]
+pub struct PatchFile {
+    data: Arc<[u8]>,
+    md5: [u8; 16],
+    size: u64,
+}
+
+impl PatchFile {
+    fn verify_size(size: usize) -> Option<u64> {
+        let s = size.try_into();
+        s.ok()
+    }
+
+    pub fn data_size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn md5(&self) -> &[u8; 16] {
+        &self.md5
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn new(data: Arc<[u8]>) -> Option<Self> {
+        if let Some(size) = Self::verify_size(data.len()) {
+            let md5 = md5::compute(&data).0;
+            Some(Self { data, md5, size })
+        } else {
+            None
+        }
+    }
+}
+
 pub trait PatchProvider: Debug + Clone + Send + Sync + 'static {
     fn get_patch(
         &mut self,
         message: &CMD_AUTH_LOGON_CHALLENGE_Client,
-    ) -> impl Future<Output = Option<Arc<[u8]>>> + Send;
+    ) -> impl Future<Output = Option<PatchFile>> + Send;
 }
 
 pub trait GameFileProvider: Debug + Clone + Send + Sync + 'static {

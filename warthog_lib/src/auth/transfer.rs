@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use tokio::net::TcpStream;
 use tracing::{error, info, trace, warn};
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
@@ -11,15 +10,14 @@ use wow_login_messages::{CollectiveMessage, Message};
 pub(crate) async fn transfer(
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
-    data: Arc<[u8]>,
+    data: &[u8],
     file_size: u64,
+    file_md5: [u8; 16],
 ) -> std::io::Result<()> {
     trace!("starting file transfer");
     CMD_AUTH_LOGON_CHALLENGE_Server::LoginDownloadFile
         .tokio_write_protocol(&mut stream, c.protocol_version)
         .await?;
-
-    let file_md5 = md5::compute(&data).0;
 
     CMD_XFER_INITIATE {
         filename: "Patch".to_string(),
@@ -40,9 +38,16 @@ pub(crate) async fn transfer(
     let offset = match s {
         ClientOpcodeMessage::CMD_XFER_ACCEPT => 0,
         ClientOpcodeMessage::CMD_XFER_RESUME(r) => match r.offset.try_into() {
-            Ok(e) => e,
+            Ok(e) => {
+                if e > data.len() {
+                    error!(message = ?c, size = e, "transfer offset larger data");
+                    return Ok(());
+                } else {
+                    e
+                }
+            }
             Err(_) => {
-                error!(message = ?c, size = r.offset, "transfer offset too large");
+                error!(message = ?c, size = r.offset, "transfer offset too large to fit in usize");
                 return Ok(());
             }
         },
@@ -54,7 +59,7 @@ pub(crate) async fn transfer(
 
     const TRANSFER_CHUNK: usize = 64;
 
-    for i in (offset..data.len()).step_by(TRANSFER_CHUNK) {
+    for i in data[offset..].chunks(TRANSFER_CHUNK) {
         let mut buf = [0_u8; 1];
         let size = stream.peek(&mut buf).await?;
         if size != 0 {
@@ -63,17 +68,9 @@ pub(crate) async fn transfer(
             return Ok(());
         }
 
-        let length = if i + TRANSFER_CHUNK > data.len() {
-            data.len() - i
-        } else {
-            TRANSFER_CHUNK
-        };
-
-        CMD_XFER_DATA {
-            data: data[i..i + length].to_vec(),
-        }
-        .tokio_write(&mut stream)
-        .await?;
+        CMD_XFER_DATA { data: i.to_vec() }
+            .tokio_write(&mut stream)
+            .await?;
     }
 
     // Keep the connection alive until the client breaks it off and updates
