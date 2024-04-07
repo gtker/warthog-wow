@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
+use tracing::{error, info};
 use warthog_lib::{
     CMD_AUTH_LOGON_CHALLENGE_Client, Population, Realm, RealmCategory, RealmListProvider,
     RealmType, Realm_RealmFlag,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct RealmListImpl {
     realms: Arc<Mutex<Vec<Realm>>>,
 }
@@ -34,6 +35,7 @@ impl RealmListImpl {
         None
     }
 
+    #[tracing::instrument]
     pub fn add_realm(&mut self, name: String, address: String) -> Option<u8> {
         if let Some(realm_id) = self.first_available_realm_id() {
             self.realms.lock().unwrap().push(Realm {
@@ -48,12 +50,17 @@ impl RealmListImpl {
                 realm_id,
             });
 
+            info!(realm_id, "adding realm");
+
             Some(realm_id)
         } else {
+            error!("Unable to find available realm id");
+
             None
         }
     }
 
+    #[tracing::instrument]
     pub fn remove_realm(&mut self, realm_id: u8) {
         if let Some((i, _)) = self
             .realms
@@ -63,6 +70,7 @@ impl RealmListImpl {
             .enumerate()
             .find(|(_, a)| a.realm_id == realm_id)
         {
+            info!("removing realm");
             self.realms.lock().unwrap().remove(i);
         }
     }

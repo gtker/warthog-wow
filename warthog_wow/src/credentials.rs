@@ -4,7 +4,7 @@ use warthog_lib::{
     MatrixCardOptions, NormalizedString, SrpVerifier,
 };
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub(crate) struct ProviderImpl {
     use_pin: bool,
     use_matrix_card: bool,

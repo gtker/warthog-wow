@@ -1,19 +1,20 @@
-use crate::auth::error::InternalError;
-use crate::ExpectedOpcode;
 use std::sync::Arc;
 use tokio::net::TcpStream;
+use tracing::{error, info, trace, warn};
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::version_8::opcodes::ClientOpcodeMessage;
 use wow_login_messages::version_8::CMD_AUTH_LOGON_CHALLENGE_Server;
 use wow_login_messages::version_8::{CMD_XFER_DATA, CMD_XFER_INITIATE};
 use wow_login_messages::{CollectiveMessage, Message};
 
+#[tracing::instrument]
 pub(crate) async fn transfer(
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
     data: Arc<[u8]>,
     file_size: u64,
-) -> Result<(), InternalError> {
+) -> std::io::Result<()> {
+    trace!("starting file transfer");
     CMD_AUTH_LOGON_CHALLENGE_Server::LoginDownloadFile
         .tokio_write_protocol(&mut stream, c.protocol_version)
         .await?;
@@ -31,10 +32,8 @@ pub(crate) async fn transfer(
     let s = match ClientOpcodeMessage::tokio_read_protocol(&mut stream, c.protocol_version).await {
         Ok(s) => s,
         Err(err) => {
-            return Err(InternalError::ExpectedOpcodeError {
-                err,
-                expected: ExpectedOpcode::XferOrResume,
-            });
+            error!(?err, "incorrect opcode received during transfer or resume");
+            return Ok(());
         }
     };
 
@@ -43,13 +42,14 @@ pub(crate) async fn transfer(
         ClientOpcodeMessage::CMD_XFER_RESUME(r) => match r.offset.try_into() {
             Ok(e) => e,
             Err(_) => {
-                return Err(InternalError::TransferOffsetTooLarge {
-                    message: c,
-                    size: r.offset,
-                })
+                error!(message = ?c, size = r.offset, "transfer offset too large");
+                return Ok(());
             }
         },
-        opcode => return Err(InternalError::MessageInvalid { message: c, opcode }),
+        opcode => {
+            warn!(message = ?c, ?opcode, "invalid message received");
+            return Ok(());
+        }
     };
 
     const TRANSFER_CHUNK: usize = 64;
@@ -59,6 +59,7 @@ pub(crate) async fn transfer(
         let size = stream.peek(&mut buf).await?;
         if size != 0 {
             // Client doesn't send any messages other than CMD_XFER_CANCEL
+            info!("client sent CMD_XFER_CANCEL");
             return Ok(());
         }
 

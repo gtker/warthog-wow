@@ -1,10 +1,10 @@
-use crate::auth::error::InternalError;
 use crate::auth::send_realm_list;
 use crate::{
-    CredentialProvider, Credentials, ExpectedOpcode, GameFileProvider, KeyStorage, Options,
-    RealmListProvider,
+    CredentialProvider, Credentials, GameFileProvider, KeyStorage, Options, RealmListProvider,
 };
+use std::io;
 use tokio::net::TcpStream;
+use tracing::{error, trace};
 use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 use wow_login_messages::helper::tokio_expect_client_message_protocol;
 use wow_login_messages::version_8::{
@@ -20,6 +20,14 @@ use wow_srp::pin::{get_pin_grid_seed, get_pin_salt};
 use wow_srp::server::{SrpServer, SrpVerifier};
 use wow_srp::{PublicKey, GENERATOR, LARGE_SAFE_PRIME_LITTLE_ENDIAN};
 
+#[tracing::instrument(skip(
+    provider,
+    storage,
+    game_file_provider,
+    realm_list_provider,
+    options,
+    stream
+))]
 pub(crate) async fn logon(
     mut provider: impl CredentialProvider,
     mut storage: impl KeyStorage,
@@ -28,7 +36,8 @@ pub(crate) async fn logon(
     mut stream: TcpStream,
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
     options: &Options,
-) -> Result<(), InternalError> {
+) -> io::Result<()> {
+    trace!("connection received");
     let protocol_version = c.protocol_version;
 
     let Ok(username) = NormalizedString::new(&c.account_name) else {
@@ -36,7 +45,8 @@ pub(crate) async fn logon(
             .tokio_write_protocol(&mut stream, protocol_version)
             .await?;
 
-        return Err(InternalError::UsernameInvalid { message: c });
+        error!("invalid username");
+        return Ok(());
     };
 
     let Some(credentials) = provider.get_user(&c.account_name, &c).await else {
@@ -44,7 +54,8 @@ pub(crate) async fn logon(
             .tokio_write_protocol(&mut stream, protocol_version)
             .await?;
 
-        return Err(InternalError::UsernameNotFound { message: c });
+        error!("username not found");
+        return Ok(());
     };
 
     let verifier = SrpVerifier::from_database_values(
@@ -104,23 +115,25 @@ pub(crate) async fn logon(
     {
         Ok(s) => s,
         Err(err) => {
-            return Err(InternalError::ExpectedOpcodeError {
-                err,
-                expected: ExpectedOpcode::LogonProof,
-            });
+            error!(?err, "invalid opcode received when expecting proof");
+            return Ok(());
         }
     };
 
     let client_public_key = match PublicKey::from_le_bytes(s.client_public_key) {
         Ok(p) => p,
-        Err(err) => return Err(InternalError::InvalidPublicKey { message: c, err }),
+        Err(err) => {
+            error!(?err, ?s.client_public_key, "invalid public key");
+            return Ok(());
+        }
     };
     let Ok((server, server_proof)) = proof.into_server(client_public_key, s.client_proof) else {
         CMD_AUTH_LOGON_PROOF_Server::FailIncorrectPassword
             .tokio_write_protocol(&mut stream, protocol_version)
             .await?;
 
-        return Err(InternalError::InvalidPasswordForUser { message: c });
+        error!(?s.client_proof, "invalid password");
+        return Ok(());
     };
 
     if let Some(game_files) = game_file_provider.get_game_files(&c).await {
@@ -134,11 +147,12 @@ pub(crate) async fn logon(
                 .tokio_write_protocol(&mut stream, protocol_version)
                 .await?;
 
-            return Err(InternalError::InvalidIntegrityCheckForUser { message: c });
+            error!("invalid integrity check");
+            return Ok(());
         }
     }
 
-    if let Err(err) = check_2fa_login_details(
+    if !check_2fa_login_details(
         c.clone(),
         credentials,
         pin_grid_seed,
@@ -153,10 +167,11 @@ pub(crate) async fn logon(
             .tokio_write_protocol(&mut stream, protocol_version)
             .await?;
 
-        return Err(err);
+        return Ok(());
     }
 
     storage.add_key(c.account_name.clone(), server).await;
+    trace!("authenticated user");
 
     CMD_AUTH_LOGON_PROOF_Server::Success {
         account_flag: AccountFlag::empty(),
@@ -172,6 +187,7 @@ pub(crate) async fn logon(
     Ok(())
 }
 
+#[tracing::instrument]
 async fn check_2fa_login_details(
     c: CMD_AUTH_LOGON_CHALLENGE_Client,
     credentials: Credentials,
@@ -180,7 +196,7 @@ async fn check_2fa_login_details(
     seed: u64,
     s: &CMD_AUTH_LOGON_PROOF_Client,
     server: &SrpServer,
-) -> Result<(), InternalError> {
+) -> bool {
     if let Some(p) = credentials.pin {
         if let Some(pin) = s.security_flag.get_pin() {
             if wow_srp::pin::verify_client_pin_hash(
@@ -190,12 +206,14 @@ async fn check_2fa_login_details(
                 &pin.pin_salt,
                 &pin.pin_hash,
             ) {
-                println!("PIN hashes match");
+                trace!("PIN hashes match");
             } else {
-                return Err(InternalError::PinInvalidForUser { message: c });
+                error!("invalid pin");
+                return false;
             }
         } else {
-            return Err(InternalError::PinNotSentForUser { message: c });
+            error!("pin not sent");
+            return false;
         }
     }
 
@@ -210,14 +228,16 @@ async fn check_2fa_login_details(
                 server.session_key(),
                 &client_proof,
             ) {
-                return Err(InternalError::MatrixCardInvalidForUser { message: c });
+                error!("invalid matrix card");
+                return false;
             } else {
                 println!("{} passed matrix card.", c.account_name);
             }
         } else {
-            return Err(InternalError::MatrixCardDataNotSentForUser { message: c });
+            error!("matrix card not sent");
+            return false;
         }
     }
 
-    Ok(())
+    true
 }

@@ -2,10 +2,11 @@ use clap::Parser;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use tracing::info;
 use warthog_lib::Options;
 use warthog_wow::ApplicationOptions;
 
-#[derive(clap::Parser)]
+#[derive(clap::Parser, Debug)]
 #[command(version, about)]
 struct Args {
     /// Address to host auth server on.
@@ -38,9 +39,12 @@ impl Args {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     let args = Args::parse();
 
     let (options, application_options) = args.to_options();
+    info!(?options, ?application_options, "options parsed");
     let should_run = Arc::new(AtomicBool::new(true));
+
     warthog_wow::lib_main(options, application_options, should_run).await;
 }

@@ -1,7 +1,8 @@
-use crate::auth::error::InternalError;
 use crate::auth::send_realm_list;
-use crate::{ExpectedOpcode, KeyStorage, RealmListProvider};
+use crate::{KeyStorage, RealmListProvider};
+use std::io;
 use tokio::net::TcpStream;
+use tracing::{error, trace};
 use wow_login_messages::all::{
     CMD_AUTH_LOGON_CHALLENGE_Client, CMD_AUTH_RECONNECT_CHALLENGE_Client,
 };
@@ -12,18 +13,21 @@ use wow_login_messages::version_8::{
 };
 use wow_login_messages::CollectiveMessage;
 
+#[tracing::instrument(skip(realm_list_provider, storage, stream))]
 pub(crate) async fn reconnect(
     mut storage: impl KeyStorage,
     realm_list_provider: impl RealmListProvider,
     mut stream: TcpStream,
     c: CMD_AUTH_RECONNECT_CHALLENGE_Client,
-) -> Result<(), InternalError> {
+) -> io::Result<()> {
+    trace!("connected");
     let Some(mut server) = storage.get_key_for_user(&c.account_name).await else {
         CMD_AUTH_RECONNECT_CHALLENGE_Server::FailUnknownAccount
             .tokio_write_protocol(&mut stream, c.protocol_version)
             .await?;
 
-        return Err(InternalError::InvalidUserAttemptedReconnect { message: c });
+        error!("invalid user attempted reconnect");
+        return Ok(());
     };
 
     CMD_AUTH_RECONNECT_CHALLENGE_Server::Success {
@@ -42,10 +46,8 @@ pub(crate) async fn reconnect(
     {
         Ok(s) => s,
         Err(err) => {
-            return Err(InternalError::ExpectedOpcodeError {
-                err,
-                expected: ExpectedOpcode::ReconnectProof,
-            })
+            error!(?err, "invalid opcode received during reconnect proof");
+            return Ok(());
         }
     };
 
@@ -56,7 +58,8 @@ pub(crate) async fn reconnect(
         .tokio_write_protocol(&mut stream, c.protocol_version)
         .await?;
 
-        return Err(InternalError::InvalidReconnectIntegrityCheckForUser { message: c });
+        error!("invalid integrity check");
+        return Ok(());
     }
 
     if !server.verify_reconnection_attempt(s.proof_data, s.client_proof) {
@@ -66,8 +69,11 @@ pub(crate) async fn reconnect(
         .tokio_write_protocol(&mut stream, c.protocol_version)
         .await?;
 
-        return Err(InternalError::InvalidReconnectProofForUser { message: c });
+        error!("invalid reconnect proof");
+        return Ok(());
     }
+
+    trace!("re-authenticated user");
 
     CMD_AUTH_RECONNECT_PROOF_Server {
         result: LoginResult::Success,
@@ -75,6 +81,7 @@ pub(crate) async fn reconnect(
     .tokio_write_protocol(&mut stream, c.protocol_version)
     .await?;
 
+    // send_realm_list requires a logon challenge, not a reconnect
     let c = CMD_AUTH_LOGON_CHALLENGE_Client {
         protocol_version: c.protocol_version,
         version: c.version,

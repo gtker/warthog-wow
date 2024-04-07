@@ -8,6 +8,8 @@ warthog_lib = { path = "../warthog_lib" }
 clap = { version = "4.5.1", features = ["derive"] }
 tokio.workspace = true
 warthog_messages = { path = "../warthog_messages", features = ["tokio"] }
+tracing-subscriber = "0.3.18"
+tracing = { version = "0.1.40" }
 
 
 [dev-dependencies]

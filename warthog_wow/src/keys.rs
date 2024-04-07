@@ -3,7 +3,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 use warthog_lib::{KeyStorage, SrpServer};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct KeyImpl {
     inner: Arc<Mutex<HashMap<String, SrpServer>>>,
 }

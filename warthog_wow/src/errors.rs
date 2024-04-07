@@ -5,7 +5,7 @@ use warthog_lib::{
     ErrorProvider, ExpectedOpcode, ExpectedOpcodeError, InvalidPublicKeyError,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ErrorImpl {}
 
 impl ErrorProvider for ErrorImpl {

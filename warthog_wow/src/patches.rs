@@ -2,7 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 use warthog_lib::{CMD_AUTH_LOGON_CHALLENGE_Client, PatchProvider};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PatchImpl {}
 
 impl PatchProvider for PatchImpl {

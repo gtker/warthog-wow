@@ -2,7 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 use warthog_lib::{CMD_AUTH_LOGON_CHALLENGE_Client, GameFileProvider};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct GameFileImpl {}
 
 impl GameFileProvider for GameFileImpl {

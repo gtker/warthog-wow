@@ -8,7 +8,6 @@ mod reply;
 
 use crate::reply::start_reply_server;
 use credentials::ProviderImpl;
-use errors::ErrorImpl;
 use game_files::GameFileImpl;
 use keys::KeyImpl;
 use patches::PatchImpl;
@@ -16,8 +15,10 @@ use realm_list::RealmListImpl;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use tracing::info;
 use warthog_lib::{start_auth_server, Options};
 
+#[derive(Debug)]
 pub struct ApplicationOptions {
     pub reply_address: SocketAddr,
     pub use_pin: bool,
@@ -44,7 +45,6 @@ pub async fn lib_main(
             PatchImpl {},
             GameFileImpl {},
             realms_auth,
-            ErrorImpl {},
             should_run,
             options,
         )
@@ -57,10 +57,10 @@ pub async fn lib_main(
 
     tokio::select! {
         auth = auth => {
-            println!("auth terminated {auth:?}");
+            info!(?auth, "auth terminated");
         }
         reply = reply => {
-            println!("reply terminated {reply:?}");
+            info!(?reply, "reply terminated");
         }
     }
 }
