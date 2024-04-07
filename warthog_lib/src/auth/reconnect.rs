@@ -82,16 +82,7 @@ pub(crate) async fn reconnect(
     .await?;
 
     // send_realm_list requires a logon challenge, not a reconnect
-    let c = CMD_AUTH_LOGON_CHALLENGE_Client {
-        protocol_version: c.protocol_version,
-        version: c.version,
-        platform: c.platform,
-        os: c.os,
-        locale: c.locale,
-        utc_timezone_offset: c.utc_timezone_offset,
-        client_ip_address: c.client_ip_address,
-        account_name: c.account_name,
-    };
+    let c: CMD_AUTH_LOGON_CHALLENGE_Client = c.into();
 
     send_realm_list(&mut stream, &c, realm_list_provider).await?;
 

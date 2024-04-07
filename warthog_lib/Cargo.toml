@@ -9,8 +9,6 @@ md5 = "0.7.0"
 tokio.workspace = true
 tracing = { version = "0.1.40", features = ["async-await"] }
 
-wow_login_messages = { git = "https://github.com/gtker/wow_messages", rev = "12dc264dd22cba3c31de78ea551fcffdefb9265d", default-features = false, features = ["tokio"] }
-#wow_login_messages = { path = "../../wow_messages/wow_login_messages", default-features = false, features = ["tokio"] }
+wow_login_messages.workspace = true
 
-wow_srp = { git = "https://github.com/gtker/wow_srp", rev = "5428c4fd722005ea1be2e866d6f0e5d3000b7cd4", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }
-#wow_srp = { path = "../../wow_srp", default-features = false, features = ["srp-default-math", "integrity", "matrix-card"] }
+wow_srp.workspace = true

@@ -680,7 +680,7 @@ dependencies = [
  "tokio",
  "tracing",
  "wow_login_messages",
- "wow_srp 0.7.0 (git+https://github.com/gtker/wow_srp?rev=5428c4fd722005ea1be2e866d6f0e5d3000b7cd4)",
+ "wow_srp",
 ]
 
 [[package]]
@@ -869,27 +869,15 @@ version = "0.1.0"
 dependencies = [
  "tokio",
  "wow_login_messages",
- "wow_srp 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wow_srp",
 ]
 
 [[package]]
 name = "wow_login_messages"
 version = "0.4.0"
-source = "git+https://github.com/gtker/wow_messages?rev=12dc264dd22cba3c31de78ea551fcffdefb9265d#12dc264dd22cba3c31de78ea551fcffdefb9265d"
+source = "git+https://github.com/gtker/wow_messages.git?rev=0b8c01775429660da4b7a3b60477a7909daacbc6#0b8c01775429660da4b7a3b60477a7909daacbc6"
 dependencies = [
  "tokio",
-]
-
-[[package]]
-name = "wow_srp"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc239609a34604bf1c3fc5c00ce4c9534acea0413f98af3a19d66184b0a3787d"
-dependencies = [
- "hmac",
- "num-bigint",
- "rand",
- "sha-1",
 ]
 
 [[package]]
