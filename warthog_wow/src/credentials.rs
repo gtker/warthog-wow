@@ -1,7 +1,7 @@
 use std::future::Future;
 use warthog_lib::{
     CMD_AUTH_LOGON_CHALLENGE_Client, CredentialProvider, Credentials, MatrixCard,
-    MatrixCardOptions, NormalizedString, SrpVerifier,
+    MatrixCardOptions, NormalizedString, PinCode, SrpVerifier,
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -51,7 +51,7 @@ impl CredentialProvider for ProviderImpl {
         };
 
         let pin = if message.version.supports_pin() && self.use_pin {
-            Some(1234)
+            Some(PinCode::from_u32(1234).unwrap())
         } else {
             None
         };

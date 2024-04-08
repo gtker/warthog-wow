@@ -883,7 +883,7 @@ dependencies = [
 [[package]]
 name = "wow_srp"
 version = "0.7.0"
-source = "git+https://github.com/gtker/wow_srp?rev=5428c4fd722005ea1be2e866d6f0e5d3000b7cd4#5428c4fd722005ea1be2e866d6f0e5d3000b7cd4"
+source = "git+https://github.com/gtker/wow_srp?rev=119468a4896b42f7e1bc2ecdfeb790592dd173ea#119468a4896b42f7e1bc2ecdfeb790592dd173ea"
 dependencies = [
  "hmac",
  "md5",

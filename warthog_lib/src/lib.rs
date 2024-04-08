@@ -24,6 +24,7 @@ pub use wow_login_messages::version_8::Realm_RealmFlag_SpecifyBuild;
 pub use wow_srp::error::InvalidPublicKeyError;
 pub use wow_srp::matrix_card::MatrixCard;
 pub use wow_srp::normalized_string::NormalizedString;
+pub use wow_srp::pin::PinCode;
 pub use wow_srp::server::SrpServer;
 pub use wow_srp::server::SrpVerifier;
 pub use wow_srp::PASSWORD_VERIFIER_LENGTH;
@@ -43,7 +44,7 @@ pub struct Options {
 pub struct Credentials {
     pub password_verifier: [u8; PASSWORD_VERIFIER_LENGTH as usize],
     pub salt: [u8; SALT_LENGTH as usize],
-    pub pin: Option<u32>,
+    pub pin: Option<PinCode>,
     pub matrix_card: Option<MatrixCardOptions>,
 }
 
