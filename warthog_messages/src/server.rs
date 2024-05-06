@@ -9,7 +9,7 @@ pub enum ServerOpcodes {
         address: String,
         population: f32,
         locked: bool,
-        flags: u32,
+        flags: u8,
         category: u8,
         realm_type: u8,
         version_major: u8,
@@ -43,7 +43,7 @@ impl ServerOpcodes {
 
                 let locked = crate::read_bool(&mut r)?;
 
-                let flags = crate::read_u32(&mut r)?;
+                let flags = crate::read_u8(&mut r)?;
 
                 let category = crate::read_u8(&mut r)?;
 
@@ -103,7 +103,7 @@ impl ServerOpcodes {
 
                 crate::write_bool(&mut w, *locked)?;
 
-                crate::write_u32(&mut w, *flags)?;
+                crate::write_u8(&mut w, *flags)?;
 
                 crate::write_u8(&mut w, *category)?;
 
@@ -141,7 +141,7 @@ impl ServerOpcodes {
 
                 let locked = crate::read_bool_tokio(&mut r).await?;
 
-                let flags = crate::read_u32_tokio(&mut r).await?;
+                let flags = crate::read_u8_tokio(&mut r).await?;
 
                 let category = crate::read_u8_tokio(&mut r).await?;
 
@@ -204,7 +204,7 @@ impl ServerOpcodes {
 
                 crate::write_bool_tokio(&mut w, *locked).await?;
 
-                crate::write_u32_tokio(&mut w, *flags).await?;
+                crate::write_u8_tokio(&mut w, *flags).await?;
 
                 crate::write_u8_tokio(&mut w, *category).await?;
 

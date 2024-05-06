@@ -2,7 +2,10 @@ use crate::realm_list::RealmListImpl;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, trace};
-use warthog_lib::KeyStorage;
+use warthog_lib::{
+    KeyStorage, Population, RealmCategory, RealmFlag, RealmType, Realm_RealmFlag,
+    Realm_RealmFlag_SpecifyBuild, Version,
+};
 use warthog_messages::{ClientOpcodes, MessageError, ServerOpcodes};
 
 #[tracing::instrument(skip(users, realm))]
@@ -49,9 +52,48 @@ async fn handle_reply(
                 ServerOpcodes::RequestSessionKey { name } => {
                     session_key_request(&mut stream, &mut users, name).await?;
                 }
-                ServerOpcodes::RegisterRealm { name, address, .. } => {
-                    register_realm_request(&mut stream, &mut realm, realm_id, name, address)
-                        .await?;
+                ServerOpcodes::RegisterRealm {
+                    name,
+                    address,
+                    population,
+                    locked,
+                    flags,
+                    category,
+                    realm_type,
+                    version_major,
+                    version_minor,
+                    version_patch,
+                    version_build,
+                } => {
+                    let flags = if RealmFlag::new(flags).is_specify_build() {
+                        Realm_RealmFlag::new(
+                            flags,
+                            Some(Realm_RealmFlag_SpecifyBuild {
+                                version: Version {
+                                    major: version_major,
+                                    minor: version_minor,
+                                    patch: version_patch,
+                                    build: version_build,
+                                },
+                            }),
+                        )
+                    } else {
+                        Realm_RealmFlag::new(flags, None)
+                    };
+
+                    register_realm_request(
+                        &mut stream,
+                        &mut realm,
+                        realm_id,
+                        name,
+                        address,
+                        Population::from(population),
+                        locked,
+                        flags,
+                        RealmCategory::try_from(category).unwrap(),
+                        RealmType::try_from(realm_type).unwrap(),
+                    )
+                    .await?;
                 }
             },
             Err(e) => {
@@ -88,9 +130,17 @@ async fn register_realm_request(
     realm_id: &mut Option<u8>,
     name: String,
     address: String,
+    population: Population,
+    locked: bool,
+    flag: Realm_RealmFlag,
+    category: RealmCategory,
+    realm_type: RealmType,
 ) -> Result<(), MessageError> {
-    trace!(name, address, "got register realm");
-    *realm_id = realm.add_realm(name, address);
+    trace!("got register realm");
+
+    *realm_id = realm.add_realm(
+        name, address, population, locked, flag, category, realm_type, *realm_id,
+    );
 
     ClientOpcodes::RegisterRealmReply {
         realm_id: *realm_id,

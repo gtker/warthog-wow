@@ -14,10 +14,13 @@ use crate::auth::auth;
 pub use wow_login_messages::all::CMD_AUTH_LOGON_CHALLENGE_Client;
 pub use wow_login_messages::all::CMD_AUTH_RECONNECT_CHALLENGE_Client;
 pub use wow_login_messages::all::Population;
+pub use wow_login_messages::all::Version;
 pub use wow_login_messages::errors::ExpectedOpcodeError;
 pub use wow_login_messages::version_8::opcodes::ClientOpcodeMessage;
 pub use wow_login_messages::version_8::Realm;
+
 pub use wow_login_messages::version_8::RealmCategory;
+pub use wow_login_messages::version_8::RealmFlag;
 pub use wow_login_messages::version_8::RealmType;
 pub use wow_login_messages::version_8::Realm_RealmFlag;
 pub use wow_login_messages::version_8::Realm_RealmFlag_SpecifyBuild;

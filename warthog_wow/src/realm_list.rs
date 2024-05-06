@@ -36,27 +36,61 @@ impl RealmListImpl {
     }
 
     #[tracing::instrument]
-    pub fn add_realm(&mut self, name: String, address: String) -> Option<u8> {
-        if let Some(realm_id) = self.first_available_realm_id() {
-            self.realms.lock().unwrap().push(Realm {
-                realm_type: RealmType::PlayerVsEnvironment,
-                locked: false,
-                flag: Realm_RealmFlag::empty(),
-                name,
-                address,
-                population: Population::default(),
-                number_of_characters_on_realm: 0,
-                category: RealmCategory::default(),
-                realm_id,
-            });
+    pub fn add_realm(
+        &mut self,
+        name: String,
+        address: String,
+        population: Population,
+        locked: bool,
+        flag: Realm_RealmFlag,
+        category: RealmCategory,
+        realm_type: RealmType,
+        realm_id: Option<u8>,
+    ) -> Option<u8> {
+        if let Some(realm_id) = realm_id {
+            if let Some(realm) = self
+                .realms
+                .lock()
+                .unwrap()
+                .iter_mut()
+                .find(|a| a.realm_id == realm_id)
+            {
+                realm.name = name;
+                realm.address = address;
+                realm.population = population;
+                realm.locked = locked;
+                realm.flag = flag;
+                realm.category = category;
+                realm.realm_type = realm_type;
 
-            info!(realm_id, "adding realm");
+                Some(realm_id)
+            } else {
+                error!("Unable to realm with id {realm_id:?}");
 
-            Some(realm_id)
+                None
+            }
         } else {
-            error!("Unable to find available realm id");
+            if let Some(realm_id) = self.first_available_realm_id() {
+                self.realms.lock().unwrap().push(Realm {
+                    realm_type,
+                    locked,
+                    flag,
+                    name,
+                    address,
+                    population,
+                    number_of_characters_on_realm: 0,
+                    category,
+                    realm_id,
+                });
 
-            None
+                info!(realm_id, "adding realm");
+
+                Some(realm_id)
+            } else {
+                error!("Unable to find available realm id");
+
+                None
+            }
         }
     }
 
