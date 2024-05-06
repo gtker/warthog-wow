@@ -13,11 +13,13 @@ pub use wow_login_messages::all::{
     CMD_AUTH_LOGON_CHALLENGE_Client, Locale, Os, Platform, ProtocolVersion, Version,
 };
 pub use wow_login_messages::version_8::Realm;
+use wow_srp::pin::PinCode;
 
 pub async fn connect_and_authenticate(
     message: CMD_AUTH_LOGON_CHALLENGE_Client,
     address: SocketAddr,
     password: &str,
+    client_pin: Option<PinCode>,
 ) -> Result<(SrpClient, Vec<Realm>, TcpStream), ClientError> {
     let username = NormalizedString::new(&message.account_name)?;
     let password = NormalizedString::new(&password)?;
@@ -38,7 +40,7 @@ pub async fn connect_and_authenticate(
     )
     .await?;
 
-    let client = match s {
+    let (client, pin) = match s {
         CMD_AUTH_LOGON_CHALLENGE_Server::Success {
             generator,
             large_safe_prime,
@@ -64,17 +66,40 @@ pub async fn connect_and_authenticate(
                 return Err(ClientError::InvalidPublicKey(server_public_key));
             };
 
-            if !security_flag.is_empty() {
+            let pin = match (client_pin, security_flag.get_pin()) {
+                (None, Some(_)) => {
+                    return Err(ClientError::InvalidSecurityFlag);
+                }
+                (Some(client_pin), Some(pin)) => {
+                    let server_salt = pin.pin_salt;
+                    let pin_grid_seed = pin.pin_grid_seed;
+                    let client_salt = wow_srp::pin::get_pin_salt();
+                    let pin_hash = client_pin.into_hash(pin_grid_seed, &server_salt, &client_salt);
+
+                    Some(CMD_AUTH_LOGON_PROOF_Client_SecurityFlag_Pin {
+                        pin_hash,
+                        pin_salt: client_salt,
+                    })
+                }
+                (_, _) => None,
+            };
+
+            if security_flag.get_matrix_card().is_some()
+                || security_flag.get_authenticator().is_some()
+            {
                 return Err(ClientError::InvalidSecurityFlag);
             }
 
-            wow_srp::client::SrpClientChallenge::new(
-                username,
-                password,
-                generator,
-                large_safe_prime,
-                server_public_key,
-                salt,
+            (
+                wow_srp::client::SrpClientChallenge::new(
+                    username,
+                    password,
+                    generator,
+                    large_safe_prime,
+                    server_public_key,
+                    salt,
+                ),
+                pin,
             )
         }
         CMD_AUTH_LOGON_CHALLENGE_Server::FailUnknown0 => {
@@ -127,12 +152,24 @@ pub async fn connect_and_authenticate(
         }
     };
 
+    let security_flag = {
+        let matrix_card = None;
+        let authenticator = None;
+
+        CMD_AUTH_LOGON_PROOF_Client_SecurityFlag::new(
+            SecurityFlag::PIN | SecurityFlag::MATRIX_CARD | SecurityFlag::AUTHENTICATOR,
+            pin,
+            matrix_card,
+            authenticator,
+        )
+    };
+
     CMD_AUTH_LOGON_PROOF_Client {
         client_public_key: *client.client_public_key(),
         client_proof: *client.client_proof(),
         crc_hash: [0; 20],
         telemetry_keys: vec![],
-        security_flag: CMD_AUTH_LOGON_PROOF_Client_SecurityFlag::empty(),
+        security_flag,
     }
     .tokio_write_protocol(&mut stream, protocol_version)
     .await?;

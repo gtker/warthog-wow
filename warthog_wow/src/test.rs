@@ -97,7 +97,7 @@ async fn register_realms() {
 
     {
         let (_, realms, _) =
-            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A", None)
                 .await
                 .unwrap();
 
@@ -117,7 +117,7 @@ async fn register_realms() {
 
     {
         let (_, realms, _) =
-            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A", None)
                 .await
                 .unwrap();
 
@@ -147,7 +147,7 @@ async fn register_realms() {
 
     {
         let (_, realms, _) =
-            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A")
+            connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A", None)
                 .await
                 .unwrap();
 
