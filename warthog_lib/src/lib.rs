@@ -23,6 +23,7 @@ pub use wow_login_messages::version_8::Realm_RealmFlag;
 pub use wow_login_messages::version_8::Realm_RealmFlag_SpecifyBuild;
 pub use wow_srp::error::InvalidPublicKeyError;
 pub use wow_srp::matrix_card::MatrixCard;
+pub use wow_srp::matrix_card::MatrixCardVerifier;
 pub use wow_srp::normalized_string::NormalizedString;
 pub use wow_srp::pin::PinCode;
 pub use wow_srp::server::SrpServer;

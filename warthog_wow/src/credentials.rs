@@ -1,7 +1,7 @@
 use std::future::Future;
 use warthog_lib::{
     CMD_AUTH_LOGON_CHALLENGE_Client, CredentialProvider, Credentials, MatrixCard,
-    MatrixCardOptions, NormalizedString, PinCode, SrpVerifier,
+    MatrixCardOptions, MatrixCardVerifier, NormalizedString, PinCode, SrpVerifier,
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -19,11 +19,6 @@ impl ProviderImpl {
     }
 }
 
-const DIGIT_COUNT: u8 = 2;
-const CHALLENGE_COUNT: u8 = 1;
-const HEIGHT: u8 = 8;
-const WIDTH: u8 = 8;
-
 impl CredentialProvider for ProviderImpl {
     fn get_user(
         &mut self,
@@ -37,21 +32,20 @@ impl CredentialProvider for ProviderImpl {
 
         let matrix_card = if message.version.supports_matrix_card() && self.use_matrix_card {
             Some(MatrixCardOptions {
-                matrix_card: MatrixCard::from_data(
-                    DIGIT_COUNT,
-                    HEIGHT,
-                    WIDTH,
-                    vec![0; DIGIT_COUNT as usize * HEIGHT as usize * WIDTH as usize],
-                )
-                .unwrap(),
-                challenge_count: CHALLENGE_COUNT,
+                matrix_card: MatrixCard::from_data(vec![
+                    0;
+                    MatrixCard::DEFAULT_DIGIT_COUNT as usize
+                        * MatrixCard::DEFAULT_HEIGHT as usize
+                        * MatrixCard::DEFAULT_WIDTH as usize
+                ]),
+                challenge_count: MatrixCardVerifier::DEFAULT_CHALLENGE_COUNT,
             })
         } else {
             None
         };
 
         let pin = if message.version.supports_pin() && self.use_pin {
-            Some(PinCode::from_u32(1234).unwrap())
+            Some(PinCode::from_u64(1234).unwrap())
         } else {
             None
         };
