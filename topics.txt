@@ -2,7 +2,4 @@ Transfer
     * Patches
     * Surveys
 
-PIN
 Authenticator
-Matrix card
-
