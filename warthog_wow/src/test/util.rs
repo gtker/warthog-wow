@@ -48,6 +48,7 @@ pub async fn register_realm(mut stream: &mut TcpStream, name: String, address: S
     match ClientOpcodes::tokio_read(&mut stream).await.unwrap() {
         ClientOpcodes::SessionKeyAnswer { .. } => panic!(),
         ClientOpcodes::RegisterRealmReply { realm_id } => realm_id.unwrap(),
+        ClientOpcodes::AddUserReply { .. } => panic!(),
     }
 }
 

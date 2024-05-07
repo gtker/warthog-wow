@@ -11,7 +11,6 @@ fn read_bool<R: std::io::Read>(r: R) -> std::io::Result<bool> {
     Ok(if read_u8(r)? == 1 { true } else { false })
 }
 
-#[cfg(feature = "sync")]
 fn write_bool<W: std::io::Write>(w: W, value: bool) -> std::io::Result<()> {
     write_u8(w, if value { 1 } else { 0 })
 }
@@ -24,7 +23,6 @@ fn read_u8<R: std::io::Read>(mut r: R) -> std::io::Result<u8> {
     Ok(buf[0])
 }
 
-#[cfg(feature = "sync")]
 fn write_u8<W: std::io::Write>(mut w: W, value: u8) -> std::io::Result<()> {
     let buf = [value];
     w.write_all(&buf)
@@ -38,7 +36,6 @@ fn read_u16<R: std::io::Read>(mut r: R) -> std::io::Result<u16> {
     Ok(buf[0] as u16 | (buf[1] as u16) << 8)
 }
 
-#[cfg(feature = "sync")]
 fn write_u16<W: std::io::Write>(mut w: W, value: u16) -> std::io::Result<()> {
     let buf = value.to_le_bytes();
     w.write_all(&buf)
@@ -52,7 +49,6 @@ fn read_u32<R: std::io::Read>(mut r: R) -> std::io::Result<u32> {
     Ok(buf[0] as u32 | (buf[1] as u32) << 8 | (buf[2] as u32) << 16 | (buf[3] as u32) << 24)
 }
 
-#[cfg(feature = "sync")]
 fn write_u32<W: std::io::Write>(mut w: W, value: u32) -> std::io::Result<()> {
     let buf = value.to_le_bytes();
     w.write_all(&buf)
@@ -64,7 +60,6 @@ fn read_f32<R: std::io::Read>(r: R) -> std::io::Result<f32> {
     Ok(f32::from_le_bytes(f))
 }
 
-#[cfg(feature = "sync")]
 fn write_f32<W: std::io::Write>(w: W, value: f32) -> std::io::Result<()> {
     Ok(write_u32(w, u32::from_le_bytes(value.to_le_bytes()))?)
 }
@@ -80,7 +75,6 @@ fn read_string<R: std::io::Read>(mut r: R) -> Result<String, MessageError> {
     Ok(s)
 }
 
-#[cfg(feature = "sync")]
 fn write_string<W: std::io::Write>(mut w: W, value: &str) -> std::io::Result<()> {
     write_u8(&mut w, value.len() as u8)?;
 
@@ -101,28 +95,11 @@ async fn read_bool_tokio<R: tokio::io::AsyncReadExt + Unpin>(r: R) -> std::io::R
 }
 
 #[cfg(feature = "tokio")]
-async fn write_bool_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    w: W,
-    value: bool,
-) -> std::io::Result<()> {
-    write_u8_tokio(w, if value { 1 } else { 0 }).await
-}
-
-#[cfg(feature = "tokio")]
 async fn read_u8_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io::Result<u8> {
     let mut buf = [0_u8; 1];
     r.read_exact(&mut buf).await?;
 
     Ok(buf[0])
-}
-
-#[cfg(feature = "tokio")]
-async fn write_u8_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    mut w: W,
-    value: u8,
-) -> std::io::Result<()> {
-    let buf = [value];
-    w.write_all(&buf).await
 }
 
 #[cfg(feature = "tokio")]
@@ -134,15 +111,6 @@ async fn read_u16_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io
 }
 
 #[cfg(feature = "tokio")]
-async fn write_u16_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    mut w: W,
-    value: u16,
-) -> std::io::Result<()> {
-    let buf = value.to_le_bytes();
-    w.write_all(&buf).await
-}
-
-#[cfg(feature = "tokio")]
 async fn read_u32_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io::Result<u32> {
     let mut buf = [0_u8; 4];
     r.read_exact(&mut buf).await?;
@@ -151,40 +119,9 @@ async fn read_u32_tokio<R: tokio::io::AsyncReadExt + Unpin>(mut r: R) -> std::io
 }
 
 #[cfg(feature = "tokio")]
-async fn write_u32_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    mut w: W,
-    value: u32,
-) -> std::io::Result<()> {
-    let buf = value.to_le_bytes();
-    w.write_all(&buf).await
-}
-
-#[cfg(feature = "tokio")]
 async fn read_f32_tokio<R: tokio::io::AsyncReadExt + Unpin>(r: R) -> std::io::Result<f32> {
     let f = read_u32_tokio(r).await?.to_le_bytes();
     Ok(f32::from_le_bytes(f))
-}
-
-#[cfg(feature = "tokio")]
-async fn write_f32_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    w: W,
-    value: f32,
-) -> std::io::Result<()> {
-    Ok(write_u32_tokio(w, u32::from_le_bytes(value.to_le_bytes())).await?)
-}
-
-#[cfg(feature = "tokio")]
-async fn write_string_tokio<W: tokio::io::AsyncWriteExt + std::marker::Unpin>(
-    mut w: W,
-    value: &str,
-) -> std::io::Result<()> {
-    write_u8_tokio(&mut w, value.len() as u8).await?;
-
-    for b in value.as_bytes() {
-        write_u8_tokio(&mut w, *b).await?;
-    }
-
-    Ok(())
 }
 
 #[cfg(feature = "tokio")]

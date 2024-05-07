@@ -17,11 +17,16 @@ pub enum ServerOpcodes {
         version_patch: u8,
         version_build: u16,
     },
+    AddUser {
+        name: String,
+        password: String,
+    },
 }
 
 impl ServerOpcodes {
     const REQUEST_SESSION_KEY_OPCODE: u8 = 0;
     const REGISTER_REALM_OPCODE: u8 = 4;
+    const ADD_USER_OPCODE: u8 = 7;
 
     #[cfg(feature = "sync")]
     pub fn read<R: std::io::Read>(mut r: R) -> Result<Self, MessageError> {
@@ -68,11 +73,16 @@ impl ServerOpcodes {
                     version_build,
                 }
             }
+            Self::ADD_USER_OPCODE => {
+                let name = crate::read_string(&mut r)?;
+                let password = crate::read_string(&mut r)?;
+
+                Self::AddUser { name, password }
+            }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
     }
 
-    #[cfg(feature = "sync")]
     pub fn write<W: std::io::Write>(&mut self, mut w: W) -> std::io::Result<()> {
         match self {
             ServerOpcodes::RequestSessionKey { name } => {
@@ -113,6 +123,11 @@ impl ServerOpcodes {
                 crate::write_u8(&mut w, *version_minor)?;
                 crate::write_u8(&mut w, *version_patch)?;
                 crate::write_u16(&mut w, *version_build)?;
+            }
+            ServerOpcodes::AddUser { name, password } => {
+                crate::write_string(&mut w, name)?;
+
+                crate::write_string(&mut w, password)?;
             }
         }
 
@@ -166,6 +181,12 @@ impl ServerOpcodes {
                     version_build,
                 }
             }
+            Self::ADD_USER_OPCODE => {
+                let name = crate::read_string_tokio(&mut r).await?;
+                let password = crate::read_string_tokio(&mut r).await?;
+
+                Self::AddUser { name, password }
+            }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
     }
@@ -175,48 +196,8 @@ impl ServerOpcodes {
         &mut self,
         mut w: W,
     ) -> std::io::Result<()> {
-        match self {
-            ServerOpcodes::RequestSessionKey { name } => {
-                crate::write_u8_tokio(&mut w, Self::REQUEST_SESSION_KEY_OPCODE).await?;
-
-                crate::write_string_tokio(&mut w, &name).await?;
-            }
-            ServerOpcodes::RegisterRealm {
-                name,
-                address,
-                population,
-                locked,
-                flags,
-                category,
-                realm_type,
-                version_major,
-                version_minor,
-                version_patch,
-                version_build,
-            } => {
-                crate::write_u8_tokio(&mut w, Self::REGISTER_REALM_OPCODE).await?;
-
-                crate::write_string_tokio(&mut w, name).await?;
-
-                crate::write_string_tokio(&mut w, address).await?;
-
-                crate::write_f32_tokio(&mut w, *population).await?;
-
-                crate::write_bool_tokio(&mut w, *locked).await?;
-
-                crate::write_u8_tokio(&mut w, *flags).await?;
-
-                crate::write_u8_tokio(&mut w, *category).await?;
-
-                crate::write_u8_tokio(&mut w, *realm_type).await?;
-
-                crate::write_u8_tokio(&mut w, *version_major).await?;
-                crate::write_u8_tokio(&mut w, *version_minor).await?;
-                crate::write_u8_tokio(&mut w, *version_patch).await?;
-                crate::write_u16_tokio(&mut w, *version_build).await?;
-            }
-        }
-
-        Ok(())
+        let mut v = Vec::new();
+        self.write(&mut v)?;
+        w.write_all(&v).await
     }
 }

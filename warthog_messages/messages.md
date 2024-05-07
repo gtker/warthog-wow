@@ -76,3 +76,18 @@ msg character_amount_answer = 0x03 {
     * OK/Fail
 * Change user
     * OK/Fail
+
+```
+msg add_user = 0x06 {
+  u8 name_length;
+  String[name_length] name;
+  u8 password_length;
+  String[password_length] password;
+}
+
+msg add_user_response = 0x07 {
+  u8 name_length;
+  String[name_length] name;
+  bool success;
+}
+```

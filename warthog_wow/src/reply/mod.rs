@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, trace};
 use warthog_lib::{
-    KeyStorage, Population, RealmCategory, RealmFlag, RealmType, Realm_RealmFlag,
-    Realm_RealmFlag_SpecifyBuild, Version,
+    CredentialProvider, KeyStorage, Population, RealmCategory, RealmFlag, RealmType,
+    Realm_RealmFlag, Realm_RealmFlag_SpecifyBuild, Version,
 };
 use warthog_messages::{ClientOpcodes, MessageError, ServerOpcodes};
 
@@ -12,6 +12,7 @@ use warthog_messages::{ClientOpcodes, MessageError, ServerOpcodes};
 pub(crate) async fn start_reply_server(
     users: impl KeyStorage,
     realm: RealmListImpl,
+    credentials: impl CredentialProvider,
     reply_address: SocketAddr,
 ) -> std::io::Result<()> {
     let listener = TcpListener::bind(reply_address).await?;
@@ -22,11 +23,20 @@ pub(crate) async fn start_reply_server(
 
         let users = users.clone();
         let mut realm = realm.clone();
+        let credentials = credentials.clone();
         tokio::spawn(async move {
             let mut realm_id = None;
 
             let peer_address = stream.peer_addr();
-            match handle_reply(stream, users, realm.clone(), &mut realm_id).await {
+            match handle_reply(
+                stream,
+                users,
+                realm.clone(),
+                credentials.clone(),
+                &mut realm_id,
+            )
+            .await
+            {
                 Ok(_) => {}
                 Err(_) => {
                     info!(?peer_address, realm_id, "lost connection")
@@ -44,6 +54,7 @@ async fn handle_reply(
     mut stream: TcpStream,
     mut users: impl KeyStorage,
     mut realm: RealmListImpl,
+    mut credentials: impl CredentialProvider,
     realm_id: &mut Option<u8>,
 ) -> Result<(), MessageError> {
     loop {
@@ -94,6 +105,9 @@ async fn handle_reply(
                         RealmType::try_from(realm_type).unwrap(),
                     )
                     .await?;
+                }
+                ServerOpcodes::AddUser { name, password } => {
+                    add_user_request(&mut stream, &mut credentials, name, &password).await?;
                 }
             },
             Err(e) => {
@@ -147,5 +161,24 @@ async fn register_realm_request(
     }
     .tokio_write(&mut stream)
     .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument]
+async fn add_user_request(
+    mut stream: &mut TcpStream,
+    credentials: &mut impl CredentialProvider,
+    name: String,
+    password: &str,
+) -> Result<(), MessageError> {
+    trace!("got add user");
+
+    let success = credentials.add_user(&name, &password).await.is_some();
+
+    ClientOpcodes::AddUserReply { name, success }
+        .tokio_write(&mut stream)
+        .await?;
+
     Ok(())
 }

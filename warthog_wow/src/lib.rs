@@ -1,5 +1,4 @@
 mod credentials;
-mod errors;
 mod game_files;
 mod keys;
 mod patches;
@@ -34,15 +33,17 @@ pub async fn lib_main(
 ) {
     let keys = KeyImpl::new();
     let realms = RealmListImpl::new();
+    let provider = ProviderImpl::new(
+        application_options.use_pin,
+        application_options.use_matrix_card,
+    );
 
     let keys_auth = keys.clone();
     let realms_auth = realms.clone();
+    let provider_auth = provider.clone();
     let auth = tokio::spawn(async move {
         start_auth_server(
-            ProviderImpl::new(
-                application_options.use_pin,
-                application_options.use_matrix_card,
-            ),
+            provider_auth,
             keys_auth,
             PatchImpl {},
             GameFileImpl {},
@@ -54,7 +55,7 @@ pub async fn lib_main(
     });
 
     let reply = tokio::spawn(async move {
-        start_reply_server(keys, realms, application_options.reply_address).await
+        start_reply_server(keys, realms, provider, application_options.reply_address).await
     });
 
     tokio::select! {
