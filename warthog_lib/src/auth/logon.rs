@@ -49,7 +49,7 @@ pub(crate) async fn logon(
         return Ok(());
     };
 
-    let Some(credentials) = provider.get_user(&c.account_name, &c).await else {
+    let Some(credentials) = provider.get_user(&c).await else {
         CMD_AUTH_LOGON_CHALLENGE_Server::FailUnknownAccount
             .tokio_write_protocol(&mut stream, protocol_version)
             .await?;

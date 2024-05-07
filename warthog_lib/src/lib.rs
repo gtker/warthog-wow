@@ -69,7 +69,6 @@ pub enum ExpectedOpcode {
 pub trait CredentialProvider: std::fmt::Debug + Clone + Send + Sync + 'static {
     fn get_user(
         &mut self,
-        username: &str,
         message: &CMD_AUTH_LOGON_CHALLENGE_Client,
     ) -> impl Future<Output = Option<Credentials>> + Send;
 

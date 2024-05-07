@@ -22,12 +22,11 @@ impl ProviderImpl {
 impl CredentialProvider for ProviderImpl {
     fn get_user(
         &mut self,
-        username: &str,
         message: &CMD_AUTH_LOGON_CHALLENGE_Client,
     ) -> impl Future<Output = Option<Credentials>> + Send {
         let v = SrpVerifier::from_username_and_password(
-            NormalizedString::new(username).unwrap(),
-            NormalizedString::new(username).unwrap(),
+            NormalizedString::new(&message.account_name).unwrap(),
+            NormalizedString::new(&message.account_name).unwrap(),
         );
 
         let matrix_card = if message.version.supports_matrix_card() && self.use_matrix_card {
