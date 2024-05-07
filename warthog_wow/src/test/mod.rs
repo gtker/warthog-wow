@@ -1,6 +1,6 @@
 mod util;
 
-use crate::test::util::{register_realm, start_server, vanilla_1_12};
+use crate::test::util::{add_user, register_realm, start_server, vanilla_1_12};
 use crate::ApplicationOptions;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
@@ -30,6 +30,9 @@ async fn register_realms() {
 
     let (should_run, main) = start_server(OPTIONS, APPLICATION_OPTIONS).await;
 
+    let mut reply = TcpStream::connect(REPLY_ADDRESS).await.unwrap();
+    add_user(&mut reply, "A".to_string(), "A".to_string()).await;
+
     {
         let (_, realms, _) =
             connect_and_authenticate(vanilla_1_12("A".to_string()), GAME_ADDRESS, "A", None)
@@ -42,7 +45,6 @@ async fn register_realms() {
     const REALM_NAME: &str = "Test Realm";
     const REALM_ADDRESS: &str = "localhost:8085";
 
-    let mut reply = TcpStream::connect(REPLY_ADDRESS).await.unwrap();
     let realm_id = register_realm(
         &mut reply,
         REALM_NAME.to_string(),

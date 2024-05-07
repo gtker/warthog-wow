@@ -90,4 +90,26 @@ msg add_user_response = 0x07 {
   String[name_length] name;
   bool success;
 }
+
+msg remove_user = 0x08 {
+  u8 name_length;
+  String[name_length] name;
+}
+
+msg remove_user_response = 0x09 {
+  u8 name_length;
+  String[name_length] name;
+  bool success;
+}
+
+msg modify_user = 0x0A {
+  u8 name_length;
+  String[name_length] name;
+}
+
+msg modify_user_reply = 0x0B {
+  u8 name_length;
+  String[name_length] name;
+  bool success;
+}
 ```

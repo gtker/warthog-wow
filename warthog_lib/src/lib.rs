@@ -77,6 +77,10 @@ pub trait CredentialProvider: std::fmt::Debug + Clone + Send + Sync + 'static {
         username: &str,
         password: &str,
     ) -> impl Future<Output = Option<()>> + Send;
+
+    fn remove_user(&mut self, username: &str) -> impl Future<Output = bool> + Send;
+
+    fn modify_user(&mut self, username: &str) -> impl Future<Output = bool> + Send;
 }
 
 pub trait KeyStorage: Debug + Clone + Send + Sync + 'static {

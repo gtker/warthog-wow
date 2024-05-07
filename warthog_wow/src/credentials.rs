@@ -64,6 +64,14 @@ impl CredentialProvider for ProviderImpl {
         _username: &str,
         _password: &str,
     ) -> impl Future<Output = Option<()>> + Send {
-        async move { None }
+        async move { Some(()) }
+    }
+
+    fn remove_user(&mut self, _username: &str) -> impl Future<Output = bool> + Send {
+        async move { true }
+    }
+
+    fn modify_user(&mut self, _username: &str) -> impl Future<Output = bool> + Send {
+        async move { true }
     }
 }

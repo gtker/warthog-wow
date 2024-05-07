@@ -46,9 +46,25 @@ pub async fn register_realm(mut stream: &mut TcpStream, name: String, address: S
     .unwrap();
 
     match ClientOpcodes::tokio_read(&mut stream).await.unwrap() {
-        ClientOpcodes::SessionKeyAnswer { .. } => panic!(),
         ClientOpcodes::RegisterRealmReply { realm_id } => realm_id.unwrap(),
-        ClientOpcodes::AddUserReply { .. } => panic!(),
+        _ => panic!(),
+    }
+}
+
+pub async fn add_user(mut stream: &mut TcpStream, name: String, password: String) {
+    let original_name = name.clone();
+
+    warthog_messages::ServerOpcodes::AddUser { name, password }
+        .tokio_write(&mut stream)
+        .await
+        .unwrap();
+
+    match ClientOpcodes::tokio_read(&mut stream).await.unwrap() {
+        ClientOpcodes::AddUserReply { name, success } => {
+            assert_eq!(name, original_name);
+            assert!(success);
+        }
+        _ => panic!(),
     }
 }
 

@@ -109,6 +109,8 @@ async fn handle_reply(
                 ServerOpcodes::AddUser { name, password } => {
                     add_user_request(&mut stream, &mut credentials, name, &password).await?;
                 }
+                ServerOpcodes::RemoveUser { .. } => {}
+                ServerOpcodes::ModifyUser { .. } => {}
             },
             Err(e) => {
                 return Err(e);

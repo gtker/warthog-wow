@@ -21,12 +21,30 @@ pub enum ServerOpcodes {
         name: String,
         password: String,
     },
+    RemoveUser {
+        name: String,
+    },
+    ModifyUser {
+        name: String,
+    },
 }
 
 impl ServerOpcodes {
     const REQUEST_SESSION_KEY_OPCODE: u8 = 0;
     const REGISTER_REALM_OPCODE: u8 = 4;
-    const ADD_USER_OPCODE: u8 = 7;
+    const ADD_USER_OPCODE: u8 = 6;
+    const REMOVE_USER_OPCODE: u8 = 8;
+    const MODIFY_USER_OPCODE: u8 = 10;
+
+    const fn opcode(&self) -> u8 {
+        match self {
+            ServerOpcodes::RequestSessionKey { .. } => Self::REQUEST_SESSION_KEY_OPCODE,
+            ServerOpcodes::RegisterRealm { .. } => Self::REGISTER_REALM_OPCODE,
+            ServerOpcodes::AddUser { .. } => Self::ADD_USER_OPCODE,
+            ServerOpcodes::RemoveUser { .. } => Self::REMOVE_USER_OPCODE,
+            ServerOpcodes::ModifyUser { .. } => Self::MODIFY_USER_OPCODE,
+        }
+    }
 
     #[cfg(feature = "sync")]
     pub fn read<R: std::io::Read>(mut r: R) -> Result<Self, MessageError> {
@@ -79,15 +97,25 @@ impl ServerOpcodes {
 
                 Self::AddUser { name, password }
             }
+            Self::REMOVE_USER_OPCODE => {
+                let name = crate::read_string(&mut r)?;
+
+                Self::RemoveUser { name }
+            }
+            Self::MODIFY_USER_OPCODE => {
+                let name = crate::read_string(&mut r)?;
+
+                Self::ModifyUser { name }
+            }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
     }
 
     pub fn write<W: std::io::Write>(&mut self, mut w: W) -> std::io::Result<()> {
+        crate::write_u8(&mut w, self.opcode())?;
+
         match self {
             ServerOpcodes::RequestSessionKey { name } => {
-                crate::write_u8(&mut w, Self::REQUEST_SESSION_KEY_OPCODE)?;
-
                 crate::write_string(&mut w, &name)?;
             }
             ServerOpcodes::RegisterRealm {
@@ -103,8 +131,6 @@ impl ServerOpcodes {
                 version_patch,
                 version_build,
             } => {
-                crate::write_u8(&mut w, Self::REGISTER_REALM_OPCODE)?;
-
                 crate::write_string(&mut w, name)?;
 
                 crate::write_string(&mut w, address)?;
@@ -128,6 +154,12 @@ impl ServerOpcodes {
                 crate::write_string(&mut w, name)?;
 
                 crate::write_string(&mut w, password)?;
+            }
+            ServerOpcodes::RemoveUser { name } => {
+                crate::write_string(&mut w, name)?;
+            }
+            ServerOpcodes::ModifyUser { name } => {
+                crate::write_string(&mut w, name)?;
             }
         }
 
@@ -186,6 +218,16 @@ impl ServerOpcodes {
                 let password = crate::read_string_tokio(&mut r).await?;
 
                 Self::AddUser { name, password }
+            }
+            Self::REMOVE_USER_OPCODE => {
+                let name = crate::read_string_tokio(&mut r).await?;
+
+                Self::RemoveUser { name }
+            }
+            Self::MODIFY_USER_OPCODE => {
+                let name = crate::read_string_tokio(&mut r).await?;
+
+                Self::ModifyUser { name }
             }
             v => return Err(MessageError::InvalidOpcode(v)),
         })
